@@ -17,3 +17,9 @@ export type CreateInstanceInput = z.infer<typeof createInstanceSchema>
 export type UpdateInstanceStatusInput = z.infer<
   typeof updateInstanceStatusSchema
 >
+
+export const instanceIdSchema = z.object({
+  id: z.string().min(1, 'Identificador inválido')
+})
+
+export type InstanceIdInput = z.infer<typeof instanceIdSchema>

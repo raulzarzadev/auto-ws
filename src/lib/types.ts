@@ -14,10 +14,11 @@ export interface WhatsAppInstance {
   ownerId: string
   label: string
   status: 'pending' | 'connected' | 'disconnected'
-  qrCode?: string
+  qrCode?: string | null
   phoneNumber?: string
   createdAt: string
   updatedAt: string
+  apiKey: string
   metadata?: Record<string, unknown>
 }
 

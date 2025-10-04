@@ -2,9 +2,8 @@ import 'server-only'
 
 import { cookies } from 'next/headers'
 import { firebaseAdminAuth, firebaseAdminDb } from '@/config/firebase-admin'
+import { SESSION_COOKIE } from '@/lib/auth/constants'
 import { AppUser, UserRole } from '@/lib/types'
-
-const SESSION_COOKIE = 'auto_ws_session'
 
 const mapClaimsToUser = (claims: Record<string, unknown>): AppUser => ({
   id: String(claims.uid ?? 'unknown'),
@@ -47,6 +46,19 @@ export const requireRole = async (role: UserRole) => {
   const token = await getSessionToken()
   const user = await verifySession(token ?? undefined)
   if (!user || user.role !== role) {
+    throw new Error('UNAUTHORIZED')
+  }
+  return user
+}
+
+export const getCurrentUser = async () => {
+  const token = await getSessionToken()
+  return verifySession(token ?? undefined)
+}
+
+export const requireSession = async () => {
+  const user = await getCurrentUser()
+  if (!user) {
     throw new Error('UNAUTHORIZED')
   }
   return user

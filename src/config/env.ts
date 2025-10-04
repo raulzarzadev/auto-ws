@@ -1,5 +1,15 @@
 import { z } from 'zod'
 
+interface FirebaseConfigShape {
+  apiKey?: string
+  authDomain?: string
+  projectId?: string
+  storageBucket?: string
+  messagingSenderId?: string
+  appId?: string
+  measurementId?: string
+}
+
 const envSchema = z
   .object({
     NEXT_PUBLIC_FIREBASE_API_KEY: z.string().default('demo-api-key'),
@@ -15,6 +25,7 @@ const envSchema = z
       .default('000000000000'),
     NEXT_PUBLIC_FIREBASE_APP_ID: z.string().default('1:000000000000:web:demo'),
     NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: z.string().default('G-XXXXXXXXXX'),
+    NEXT_PUBLIC_APP_URL: z.string().default('http://localhost:3000'),
     FIREBASE_CLIENT_EMAIL: z
       .string()
       .default('demo@demo-project.iam.gserviceaccount.com'),
@@ -32,18 +43,35 @@ const envSchema = z
     isProduction: process.env.NODE_ENV === 'production'
   }))
 
+const rawFirebaseConfig = process.env.NEXT_PUBLIC_FIREBASE_CONFIG
+const parsedFirebaseConfig: FirebaseConfigShape | null = rawFirebaseConfig
+  ? JSON.parse(rawFirebaseConfig)
+  : null
+
+const pickFirebaseValue = <K extends keyof FirebaseConfigShape>(key: K) =>
+  parsedFirebaseConfig?.[key]
+
 const env = envSchema.parse({
-  NEXT_PUBLIC_FIREBASE_API_KEY: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  NEXT_PUBLIC_FIREBASE_API_KEY:
+    pickFirebaseValue('apiKey') ?? process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN:
+    pickFirebaseValue('authDomain') ??
     process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  NEXT_PUBLIC_FIREBASE_PROJECT_ID: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  NEXT_PUBLIC_FIREBASE_PROJECT_ID:
+    pickFirebaseValue('projectId') ??
+    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
   NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET:
+    pickFirebaseValue('storageBucket') ??
     process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
   NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID:
+    pickFirebaseValue('messagingSenderId') ??
     process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  NEXT_PUBLIC_FIREBASE_APP_ID: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  NEXT_PUBLIC_FIREBASE_APP_ID:
+    pickFirebaseValue('appId') ?? process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
   NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID:
+    pickFirebaseValue('measurementId') ??
     process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
+  NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
   FIREBASE_CLIENT_EMAIL: process.env.FIREBASE_CLIENT_EMAIL,
   FIREBASE_PRIVATE_KEY: process.env.FIREBASE_PRIVATE_KEY,
   FIREBASE_DATABASE_URL: process.env.FIREBASE_DATABASE_URL,
