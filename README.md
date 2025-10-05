@@ -1,36 +1,41 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
-
-## Getting Started
-
-First, run the development server:
+## Configuración rápida
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Desarrollo local
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+pnpm dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Arranca Next.js con Turbopack en [http://localhost:3000](http://localhost:3000). Cualquier cambio en `src/` recarga automáticamente la UI.
 
-## Learn More
+### Linter
 
-To learn more about Next.js, take a look at the following resources:
+Ejecución puntual:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+pnpm lint
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Modo observador (recomendado en paralelo a `pnpm dev`):
 
-## Deploy on Vercel
+```bash
+pnpm lint:watch
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+El comando utiliza `next lint`, lo que garantiza que las mismas reglas se apliquen tanto en desarrollo como en los builds de producción.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Build de producción
+
+```bash
+pnpm build
+```
+
+Genera la build optimizada utilizando Turbopack; asegúrate de que `pnpm lint` pase antes de desplegar.
+
+### Despliegue
+
+El proyecto está preparado para Vercel. Consulta la [documentación oficial](https://nextjs.org/docs/app/building-your-application/deploying) para detalles adicionales.

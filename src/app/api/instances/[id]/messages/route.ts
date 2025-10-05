@@ -40,8 +40,8 @@ export async function POST(
   let payload: unknown
   try {
     payload = await request.json()
-    console.log({ payload })
-  } catch (error) {
+  } catch (cause) {
+    console.error('[send-message] invalid-json', cause)
     return NextResponse.json(
       {
         error: 'INVALID_JSON',
@@ -54,7 +54,8 @@ export async function POST(
   if (typeof payload === 'string') {
     try {
       payload = JSON.parse(payload)
-    } catch (error) {
+    } catch (cause) {
+      console.error('[send-message] invalid-payload', cause)
       return NextResponse.json(
         {
           error: 'INVALID_PAYLOAD',
@@ -80,8 +81,8 @@ export async function POST(
     const response = await sendWhatsAppMessage(
       instance.id,
       jid,
-      content as any,
-      options as any
+      content,
+      options
     )
 
     return NextResponse.json({

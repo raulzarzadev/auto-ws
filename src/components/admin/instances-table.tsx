@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { Badge } from '@/components/ui/badge'
 import {
@@ -77,28 +77,6 @@ export const AdminInstancesTable = ({
     )
   }
 
-  const rows = useMemo(
-    () =>
-      instances.map((instance) => (
-        <TableRow key={instance.id}>
-          <TableCell className="font-medium">{instance.label}</TableCell>
-          <TableCell>{instance.phoneNumber ?? 'Sin número'}</TableCell>
-          <TableCell>
-            <Badge variant={statusVariant[instance.status]}>
-              {instance.status}
-            </Badge>
-          </TableCell>
-          <TableCell className="text-sm text-slate-500">
-            {fromNow(instance.createdAt)}
-          </TableCell>
-          <TableCell className="text-sm text-slate-500">
-            {fromNow(instance.updatedAt)}
-          </TableCell>
-        </TableRow>
-      )),
-    [instances]
-  )
-
   return (
     <Table>
       <TableHeader>
@@ -110,7 +88,25 @@ export const AdminInstancesTable = ({
           <TableHead>Actualizada</TableHead>
         </TableRow>
       </TableHeader>
-      <TableBody>{rows}</TableBody>
+      <TableBody>
+        {instances.map((instance) => (
+          <TableRow key={instance.id}>
+            <TableCell className="font-medium">{instance.label}</TableCell>
+            <TableCell>{instance.phoneNumber ?? 'Sin número'}</TableCell>
+            <TableCell>
+              <Badge variant={statusVariant[instance.status]}>
+                {instance.status}
+              </Badge>
+            </TableCell>
+            <TableCell className="text-sm text-slate-500">
+              {fromNow(instance.createdAt)}
+            </TableCell>
+            <TableCell className="text-sm text-slate-500">
+              {fromNow(instance.updatedAt)}
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
     </Table>
   )
 }

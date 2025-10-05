@@ -4,6 +4,10 @@ import {
   ensureWhatsAppJid,
   formatPhoneNumberForWhatsApp
 } from '@/lib/phone/whatsapp'
+import type {
+  AnyMessageContent,
+  MiscMessageGenerationOptions
+} from '@whiskeysockets/baileys'
 
 export const sendMessageSchema = z
   .object({
@@ -18,18 +22,30 @@ export const sendMessageSchema = z
 
 type SendMessageInput = z.infer<typeof sendMessageSchema>
 
-export const normalizeMessageInput = (input: SendMessageInput) => {
+export interface NormalizedMessageInput {
+  jid: string
+  content: AnyMessageContent
+  options?: MiscMessageGenerationOptions
+}
+
+export const normalizeMessageInput = (
+  input: SendMessageInput
+): NormalizedMessageInput => {
   const jid = input.jid
     ? ensureWhatsAppJid(input.jid)
     : formatPhoneNumberForWhatsApp(input.to as string).jid
   const messageContent =
     typeof input.content === 'string'
-      ? { text: input.content }
-      : (input.content as Record<string, unknown>)
+      ? ({ text: input.content } satisfies AnyMessageContent)
+      : (input.content as AnyMessageContent)
+
+  const normalizedOptions = input.options as
+    | MiscMessageGenerationOptions
+    | undefined
 
   return {
     jid,
     content: messageContent,
-    options: input.options as Record<string, unknown> | undefined
+    options: normalizedOptions
   }
 }

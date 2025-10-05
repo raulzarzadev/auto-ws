@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import {
   Table,
@@ -70,30 +70,6 @@ export const AdminUserTable = ({ fetchUsers }: AdminUserTableProps) => {
     )
   }
 
-  const rows = useMemo(
-    () =>
-      users.map((user) => (
-        <TableRow key={user.id}>
-          <TableCell className="font-medium">
-            {user.displayName || user.email}
-          </TableCell>
-          <TableCell>{user.email}</TableCell>
-          <TableCell>
-            <Badge variant={user.role === 'admin' ? 'success' : 'secondary'}>
-              {user.role}
-            </Badge>
-          </TableCell>
-          <TableCell className="text-sm text-slate-500">
-            {fromNow(user.createdAt)}
-          </TableCell>
-          <TableCell className="text-sm text-slate-500">
-            {user.lastLoginAt ? fromNow(user.lastLoginAt) : 'Sin registro'}
-          </TableCell>
-        </TableRow>
-      )),
-    [users]
-  )
-
   return (
     <Table>
       <TableHeader>
@@ -105,7 +81,27 @@ export const AdminUserTable = ({ fetchUsers }: AdminUserTableProps) => {
           <TableHead>Último acceso</TableHead>
         </TableRow>
       </TableHeader>
-      <TableBody>{rows}</TableBody>
+      <TableBody>
+        {users.map((user) => (
+          <TableRow key={user.id}>
+            <TableCell className="font-medium">
+              {user.displayName || user.email}
+            </TableCell>
+            <TableCell>{user.email}</TableCell>
+            <TableCell>
+              <Badge variant={user.role === 'admin' ? 'success' : 'secondary'}>
+                {user.role}
+              </Badge>
+            </TableCell>
+            <TableCell className="text-sm text-slate-500">
+              {fromNow(user.createdAt)}
+            </TableCell>
+            <TableCell className="text-sm text-slate-500">
+              {user.lastLoginAt ? fromNow(user.lastLoginAt) : 'Sin registro'}
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
     </Table>
   )
 }

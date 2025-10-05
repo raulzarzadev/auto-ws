@@ -385,7 +385,7 @@ export const UserDashboardClient = ({
                 vinculados.
               </li>
               <li>
-                Selecciona "Vincular dispositivo" y escanea el código QR
+                Selecciona “Vincular dispositivo” y escanea el código QR
                 generado.
               </li>
               <li>
@@ -393,7 +393,7 @@ export const UserDashboardClient = ({
                 desconexiones inesperadas.
               </li>
               <li>
-                Si se pierde la conexión, usa "Regenerar QR" para crear una
+                Si se pierde la conexión, usa “Regenerar QR” para crear una
                 nueva sesión segura.
               </li>
             </ol>

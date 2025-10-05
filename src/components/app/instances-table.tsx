@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -337,7 +338,7 @@ const QrModal = ({
     return () => {
       unsubscribe()
     }
-  }, [open, instance?.id, instance?.status, onInstanceUpdate])
+  }, [open, instance, onInstanceUpdate])
 
   if (!open || !instance) {
     return null
@@ -373,10 +374,13 @@ const QrModal = ({
 
         <div className="mt-6 flex flex-col items-center gap-4">
           <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900">
-            {showQr ? (
-              <img
-                src={instance.qrCode ?? ''}
+            {showQr && instance.qrCode ? (
+              <Image
+                src={instance.qrCode}
                 alt={`Código QR para ${instance.label}`}
+                width={240}
+                height={240}
+                unoptimized
                 className="h-60 w-60 rounded-xl border border-white object-contain shadow-sm"
               />
             ) : (
