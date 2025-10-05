@@ -34,7 +34,7 @@ const decodeBase64 = (token: string) => {
 
 const parseToken = (token: string) => {
   try {
-    const [header, payload] = token.split('.')
+  const [, payload] = token.split('.')
     if (!payload) {
       // plain base64 encoded JSON fallback
       return JSON.parse(decodeBase64(token))

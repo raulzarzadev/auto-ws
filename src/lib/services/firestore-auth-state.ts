@@ -48,7 +48,7 @@ const decodeKeys = (raw?: Record<string, Record<string, unknown>>) => {
   return decoded
 }
 
-export const useFirestoreAuthState = async (
+export const loadFirestoreAuthState = async (
   sessionId: string
 ): Promise<{ state: AuthenticationState; saveCreds: () => Promise<void> }> => {
   const docRef = getAuthDocRef(sessionId)

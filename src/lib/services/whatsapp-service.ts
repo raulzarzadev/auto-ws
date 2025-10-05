@@ -3,8 +3,8 @@ import 'server-only'
 import qrcode from 'qrcode'
 
 import {
-  removeFirestoreAuthState,
-  useFirestoreAuthState
+  loadFirestoreAuthState,
+  removeFirestoreAuthState
 } from '@/lib/services/firestore-auth-state'
 import { instanceRepository } from '@/lib/repositories/instance-repository'
 
@@ -15,6 +15,8 @@ type ConnectionUpdate = Partial<ConnectionState>
 type AnyMessageContent = import('@whiskeysockets/baileys').AnyMessageContent
 type MiscMessageGenerationOptions =
   import('@whiskeysockets/baileys').MiscMessageGenerationOptions
+type BaileysEventMap = import('@whiskeysockets/baileys').BaileysEventMap
+type CredsUpdatePayload = BaileysEventMap['creds.update']
 
 const QR_TIMEOUT_MS = 60_000
 const CONNECTION_TIMEOUT_MS = 20_000
@@ -287,7 +289,7 @@ const createManagedSession = async (
     DisconnectReason
   } = await importBaileys()
 
-  const { state, saveCreds } = await useFirestoreAuthState(sessionId)
+  const { state, saveCreds } = await loadFirestoreAuthState(sessionId)
   const { version } = await fetchLatestBaileysVersion()
 
   const socket = makeWASocket({
@@ -433,32 +435,87 @@ const createManagedSession = async (
   return session
 }
 
+type UnknownRecord = Record<string, unknown>
+
+const asRecord = (value: unknown): UnknownRecord => {
+  if (typeof value === 'object' && value !== null) {
+    return value as UnknownRecord
+  }
+
+  return {}
+}
+
+const getNestedValue = (source: UnknownRecord, path: readonly string[]) => {
+  let current: unknown = source
+
+  for (const key of path) {
+    if (
+      typeof current !== 'object' ||
+      current === null ||
+      !(key in (current as UnknownRecord))
+    ) {
+      return undefined
+    }
+
+    current = (current as UnknownRecord)[key]
+  }
+
+  return current
+}
+
+const toNumericCode = (value: string | number | null): number | null => {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+
+  return null
+}
+
+const selectCodeValue = (
+  ...values: unknown[]
+): string | number | null => {
+  for (const value of values) {
+    if (typeof value === 'number' || typeof value === 'string') {
+      return value
+    }
+  }
+
+  return null
+}
+
 const normalizeDisconnect = (
   lastDisconnect: unknown,
   DisconnectReason: typeof import('@whiskeysockets/baileys').DisconnectReason
 ) => {
-  const base = (lastDisconnect as any) ?? {}
-  const error = base.error ?? base
+  const base = asRecord(lastDisconnect)
+  const errorDetails = asRecord(base.error ?? base)
 
-  const statusCode =
-    error?.output?.statusCode ??
-    error?.output?.payload?.statusCode ??
-    error?.statusCode ??
-    error?.code ??
-    base?.statusCode ??
-    base?.code ??
-    null
+  const rawStatusCode = selectCodeValue(
+    getNestedValue(errorDetails, ['output', 'statusCode']),
+    getNestedValue(errorDetails, ['output', 'payload', 'statusCode']),
+    getNestedValue(errorDetails, ['statusCode']),
+    getNestedValue(errorDetails, ['code']),
+    getNestedValue(base, ['statusCode']),
+    getNestedValue(base, ['code'])
+  )
+
+  const numericStatusCode = toNumericCode(rawStatusCode)
 
   const reason =
-    statusCode === DisconnectReason.loggedOut
+    numericStatusCode === DisconnectReason.loggedOut
       ? 'logged-out'
-      : statusCode === DisconnectReason.restartRequired
+      : numericStatusCode === DisconnectReason.restartRequired
       ? 'restart-required'
-      : statusCode === DisconnectReason.connectionReplaced
+      : numericStatusCode === DisconnectReason.connectionReplaced
       ? 'replaced'
-      : statusCode === DisconnectReason.connectionClosed
+      : numericStatusCode === DisconnectReason.connectionClosed
       ? 'connection-closed'
-      : statusCode === DisconnectReason.timedOut
+      : numericStatusCode === DisconnectReason.timedOut
       ? 'timed-out'
       : 'unknown'
 
@@ -467,12 +524,12 @@ const normalizeDisconnect = (
     reason === 'restart-required' || reason === 'connection-closed'
 
   const disconnectError = Object.assign(new Error('WA_CONNECTION_CLOSED'), {
-    code: statusCode ?? 'WA_CONNECTION_CLOSED',
+    code: rawStatusCode ?? 'WA_CONNECTION_CLOSED',
     details: lastDisconnect
   })
 
   return {
-    statusCode,
+    statusCode: rawStatusCode,
     error: disconnectError,
     keepCreds,
     shouldRestart,
@@ -495,7 +552,11 @@ const teardownSession = async (
       'connection.update',
       session.connectionListener
     )
-    detachListener(session.socket, 'creds.update', session.saveCreds)
+    detachListener(
+      session.socket,
+      'creds.update',
+      session.saveCreds as unknown as (payload: CredsUpdatePayload) => void
+    )
 
     try {
       session.socket.end(undefined)
@@ -521,20 +582,26 @@ const teardownSession = async (
   }
 }
 
-const detachListener = (
+type BaileysEventEmitter = import('@whiskeysockets/baileys').BaileysEventEmitter
+
+const detachListener = <Event extends keyof BaileysEventMap>(
   socket: WASocket,
-  event: string,
-  listener: (...args: any[]) => void
+  event: Event,
+  listener: (payload: BaileysEventMap[Event]) => void
 ) => {
-  if (typeof socket.ev.off === 'function') {
-    socket.ev.off(event as any, listener as any)
+  const emitter = socket.ev as BaileysEventEmitter & {
+    removeListener?: <E extends keyof BaileysEventMap>(
+      eventName: E,
+      handler: (payload: BaileysEventMap[E]) => void
+    ) => void
+  }
+
+  if (typeof emitter.off === 'function') {
+    emitter.off(event, listener)
     return
   }
 
-  const emitter = socket.ev as unknown as {
-    removeListener?: (event: string, handler: (...args: any[]) => void) => void
-  }
-  emitter.removeListener?.(event, listener as any)
+  emitter.removeListener?.(event, listener)
 }
 
 const createDeferred = <T>(): Deferred<T> => {
