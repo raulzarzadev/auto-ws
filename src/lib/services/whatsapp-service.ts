@@ -476,9 +476,7 @@ const toNumericCode = (value: string | number | null): number | null => {
   return null
 }
 
-const selectCodeValue = (
-  ...values: unknown[]
-): string | number | null => {
+const selectCodeValue = (...values: unknown[]): string | number | null => {
   for (const value of values) {
     if (typeof value === 'number' || typeof value === 'string') {
       return value
