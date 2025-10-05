@@ -19,8 +19,10 @@ import {
 import { fromNow } from '@/lib/date'
 import { WhatsAppInstance } from '@/lib/types'
 import {
+  deleteInstanceAction,
   fetchUserInstancesAction,
   regenerateInstanceQrAction,
+  sendInstanceTestMessageAction,
   updateInstanceStatusAction
 } from '@/lib/trpc/actions'
 
@@ -150,6 +152,64 @@ export const UserDashboardClient = ({
             setFeedback({
               type: 'error',
               message: 'No pudimos regenerar el QR de la instancia.'
+            })
+          } finally {
+            setPendingAction(null)
+          }
+        })()
+      })
+    },
+    [markUpdated]
+  )
+
+  const handleDeleteInstance = useCallback(
+    (id: string) => {
+      setPendingAction({ id, type: 'delete' })
+      startMutating(() => {
+        void (async () => {
+          try {
+            await deleteInstanceAction({ id })
+            setInstances((prev) => prev.filter((item) => item.id !== id))
+            markUpdated()
+            setFeedback({
+              type: 'success',
+              message: 'Instancia eliminada correctamente.'
+            })
+          } catch (error) {
+            console.error(error)
+            setFeedback({
+              type: 'error',
+              message: 'No pudimos eliminar la instancia pendiente.'
+            })
+          } finally {
+            setPendingAction(null)
+          }
+        })()
+      })
+    },
+    [markUpdated]
+  )
+
+  const handleSendTestMessage = useCallback(
+    (id: string) => {
+      setPendingAction({ id, type: 'test-message' })
+      startMutating(() => {
+        void (async () => {
+          try {
+            await sendInstanceTestMessageAction({ id })
+            markUpdated()
+            setFeedback({
+              type: 'success',
+              message: 'Enviamos un mensaje de prueba al número configurado.'
+            })
+          } catch (error) {
+            console.error(error)
+            setFeedback({
+              type: 'error',
+              message:
+                error instanceof Error
+                  ? error.message
+                  : 'No pudimos enviar el mensaje de prueba.'
             })
           } finally {
             setPendingAction(null)
@@ -292,6 +352,8 @@ export const UserDashboardClient = ({
           onStatusChange={handleStatusChange}
           onRegenerate={handleRegenerate}
           onInstanceUpdate={handleInstanceSynced}
+          onDeleteInstance={handleDeleteInstance}
+          onSendTestMessage={handleSendTestMessage}
           pendingAction={pendingAction}
           isMutating={isMutating}
         />

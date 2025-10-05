@@ -52,6 +52,9 @@ export const instanceRepository = {
     await firebaseAdminDb.collection(COLLECTION).doc(id).set(data)
     return data
   },
+  async delete(id: string) {
+    await firebaseAdminDb.collection(COLLECTION).doc(id).delete()
+  },
   async ensureApiKey(id: string) {
     const docRef = firebaseAdminDb.collection(COLLECTION).doc(id)
     const snapshot = await docRef.get()

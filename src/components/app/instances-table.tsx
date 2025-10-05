@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { doc, onSnapshot } from 'firebase/firestore'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -14,11 +15,11 @@ import {
   CardHeader,
   CardTitle
 } from '@/components/ui/card'
+import { firestore } from '@/config/firebase-client'
 import { fromNow } from '@/lib/date'
 import { WhatsAppInstance } from '@/lib/types'
-import { fetchInstanceByIdAction } from '@/lib/trpc/actions'
 
-type ActionType = 'status' | 'regenerate'
+type ActionType = 'status' | 'regenerate' | 'delete' | 'test-message'
 
 export type PendingAction = {
   id: string
@@ -30,6 +31,8 @@ interface UserInstancesTableProps {
   onStatusChange: (id: string, status: WhatsAppInstance['status']) => void
   onRegenerate: (id: string) => void
   onInstanceUpdate: (instance: WhatsAppInstance) => void
+  onDeleteInstance: (id: string) => void
+  onSendTestMessage: (id: string) => void
   pendingAction: PendingAction
   isMutating: boolean
 }
@@ -49,13 +52,13 @@ const statusLabel: Record<WhatsAppInstance['status'], string> = {
   disconnected: 'Desconectada'
 }
 
-const POLLING_INTERVAL = 7000
-
 export const UserInstancesTable = ({
   instances,
   onStatusChange,
   onRegenerate,
   onInstanceUpdate,
+  onDeleteInstance,
+  onSendTestMessage,
   pendingAction,
   isMutating
 }: UserInstancesTableProps) => {
@@ -82,7 +85,7 @@ export const UserInstancesTable = ({
     if (!modalInstanceId) return
 
     const instance = sortedInstances.find((item) => item.id === modalInstanceId)
-    if (instance && instance.status !== 'pending') {
+    if (instance && instance.status === 'connected') {
       setModalInstanceId(null)
     }
   }, [modalInstanceId, sortedInstances])
@@ -108,6 +111,8 @@ export const UserInstancesTable = ({
         {sortedInstances.map((instance) => {
           const isPending = instance.status === 'pending'
           const isConnected = instance.status === 'connected'
+          const isDisconnected = instance.status === 'disconnected'
+
           return (
             <Card
               key={instance.id}
@@ -121,9 +126,34 @@ export const UserInstancesTable = ({
                       Creada {fromNow(instance.createdAt)}
                     </CardDescription>
                   </div>
-                  <Badge variant={statusVariant[instance.status]}>
-                    {statusLabel[instance.status]}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={statusVariant[instance.status]}>
+                      {statusLabel[instance.status]}
+                    </Badge>
+                    <Button asChild size="icon" variant="ghost">
+                      <Link href={`/app/instances/${instance.id}`}>
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          strokeWidth={1.5}
+                          stroke="currentColor"
+                          className="w-4 h-4"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z"
+                          />
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                          />
+                        </svg>
+                      </Link>
+                    </Button>
+                  </div>
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
                   Actualizada {fromNow(instance.updatedAt)}
@@ -139,7 +169,7 @@ export const UserInstancesTable = ({
                   </p>
                 </div>
 
-                {isPending ? (
+                {isPending || isDisconnected ? (
                   <div className="rounded-lg border border-dashed border-sky-300 bg-sky-50/60 p-4 text-sm text-sky-700 dark:border-sky-800 dark:bg-sky-900/30 dark:text-sky-200">
                     <p className="font-medium">Generamos un nuevo QR.</p>
                     <p className="mt-1 text-sky-600 dark:text-sky-100">
@@ -155,36 +185,21 @@ export const UserInstancesTable = ({
                       </Button>
                       <Button
                         size="sm"
-                        variant="ghost"
-                        disabled={isActionDisabled(instance.id, 'regenerate')}
-                        onClick={() => onRegenerate(instance.id)}
+                        variant="destructive"
+                        disabled={isActionDisabled(instance.id, 'delete')}
+                        onClick={() => onDeleteInstance(instance.id)}
                       >
-                        Regenerar QR
+                        Eliminar instancia
                       </Button>
                     </div>
                   </div>
                 ) : isConnected ? (
-                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-200">
-                    <p className="font-medium">
-                      Listo para integrarse con tu API personalizada.
-                    </p>
-                    <p className="mt-1">
-                      Comparte el endpoint seguro para que tu equipo envíe
-                      mensajes usando el API Key único de esta instancia.
-                    </p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <Button asChild size="sm">
+                  <div>
+                    <div className="flex justify-end">
+                      <Button asChild size="sm" variant="ghost">
                         <Link href={`/app/instances/${instance.id}`}>
                           Ver detalles de la API
                         </Link>
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        disabled={isActionDisabled(instance.id, 'regenerate')}
-                        onClick={() => onRegenerate(instance.id)}
-                      >
-                        Regenerar QR
                       </Button>
                     </div>
                   </div>
@@ -196,7 +211,28 @@ export const UserInstancesTable = ({
                 )}
               </CardContent>
               <CardFooter className="flex flex-wrap justify-end gap-2">
-                {!isConnected ? (
+                {isPending ? null : isConnected ? (
+                  <div className="flex justify-between w-full">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={isActionDisabled(instance.id, 'status')}
+                      onClick={() =>
+                        onStatusChange(instance.id, 'disconnected')
+                      }
+                    >
+                      Desconectar
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={isActionDisabled(instance.id, 'test-message')}
+                      onClick={() => onSendTestMessage(instance.id)}
+                    >
+                      Enviar mensaje de prueba
+                    </Button>
+                  </div>
+                ) : (
                   <Button
                     size="sm"
                     variant="secondary"
@@ -208,19 +244,8 @@ export const UserInstancesTable = ({
                   >
                     Marcar conectada
                   </Button>
-                ) : null}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={
-                    instance.status === 'disconnected' ||
-                    isActionDisabled(instance.id, 'status')
-                  }
-                  onClick={() => onStatusChange(instance.id, 'disconnected')}
-                >
-                  Desconectar
-                </Button>
-                {!isPending && !isConnected ? (
+                )}
+                {isDisconnected ? (
                   <Button
                     size="sm"
                     variant="ghost"
@@ -262,7 +287,6 @@ const QrModal = ({
   onClose,
   onInstanceUpdate
 }: QrModalProps) => {
-  const [isRefreshing, setIsRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -285,42 +309,35 @@ const QrModal = ({
     }
   }, [open, onClose])
 
-  const refreshInstance = useCallback(async () => {
-    if (!instance) return
-
-    setIsRefreshing(true)
-    try {
-      const updated = await fetchInstanceByIdAction({ id: instance.id })
-      onInstanceUpdate(updated)
-      setError(null)
-    } catch (err) {
-      console.error(err)
-      setError('No pudimos refrescar el QR automáticamente.')
-    } finally {
-      setIsRefreshing(false)
-    }
-  }, [instance, onInstanceUpdate])
-
   useEffect(() => {
-    if (!open || !instance || instance.status !== 'pending') {
+    if (!open || !instance) {
       return
     }
 
-    let active = true
+    setError(null)
 
-    const fetchLatest = async () => {
-      if (!active) return
-      await refreshInstance()
-    }
+    const reference = doc(firestore, 'instances', instance.id)
+    const unsubscribe = onSnapshot(
+      reference,
+      (snapshot) => {
+        if (!snapshot.exists()) {
+          setError('Esta instancia ya no está disponible.')
+          return
+        }
 
-    void fetchLatest()
-    const interval = window.setInterval(fetchLatest, POLLING_INTERVAL)
+        const data = snapshot.data() as WhatsAppInstance
+        onInstanceUpdate({ ...data, id: snapshot.id })
+      },
+      (err) => {
+        console.error(err)
+        setError('No pudimos escuchar cambios del QR en tiempo real.')
+      }
+    )
 
     return () => {
-      active = false
-      window.clearInterval(interval)
+      unsubscribe()
     }
-  }, [open, instance, refreshInstance])
+  }, [open, instance?.id, instance?.status, onInstanceUpdate])
 
   if (!open || !instance) {
     return null
@@ -372,14 +389,9 @@ const QrModal = ({
 
           <div className="flex flex-col items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
             <span>
-              Actualizamos el código cada pocos segundos para garantizar la
-              validez del enlace.
+              El QR se actualiza automáticamente cuando WhatsApp emite un nuevo
+              código. Mantén esta ventana abierta para recibirlo al instante.
             </span>
-            {isRefreshing ? (
-              <span className="text-sky-600 dark:text-sky-300">
-                Refrescando QR...
-              </span>
-            ) : null}
             {error ? <span className="text-red-500">{error}</span> : null}
           </div>
         </div>

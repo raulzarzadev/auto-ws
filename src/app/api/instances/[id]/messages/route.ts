@@ -9,9 +9,11 @@ import {
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!params?.id) {
+  const { id } = await params
+
+  if (!id) {
     return NextResponse.json({ error: 'INSTANCE_ID_REQUIRED' }, { status: 400 })
   }
 
@@ -20,7 +22,7 @@ export async function POST(
     return NextResponse.json({ error: 'API_KEY_REQUIRED' }, { status: 401 })
   }
 
-  const instance = await instanceRepository.findById(params.id)
+  const instance = await instanceRepository.findById(id)
   if (!instance || instance.apiKey !== apiKey) {
     return NextResponse.json({ error: 'UNAUTHORIZED' }, { status: 401 })
   }
@@ -38,6 +40,7 @@ export async function POST(
   let payload: unknown
   try {
     payload = await request.json()
+    console.log({ payload })
   } catch (error) {
     return NextResponse.json(
       {
@@ -48,7 +51,22 @@ export async function POST(
     )
   }
 
+  if (typeof payload === 'string') {
+    try {
+      payload = JSON.parse(payload)
+    } catch (error) {
+      return NextResponse.json(
+        {
+          error: 'INVALID_PAYLOAD',
+          message: 'El cuerpo es una cadena pero no contiene JSON válido.'
+        },
+        { status: 422 }
+      )
+    }
+  }
+
   const parseResult = sendMessageSchema.safeParse(payload)
+
   if (!parseResult.success) {
     return NextResponse.json(
       { error: 'INVALID_PAYLOAD', details: parseResult.error.flatten() },

@@ -37,6 +37,14 @@ export const createInstanceAction = async (input: CreateInstanceInput) => {
   return instance
 }
 
+export const deleteInstanceAction = async (input: InstanceIdInput) => {
+  const user = await requireSession()
+  const data = instanceIdSchema.parse(input)
+
+  await instanceService.deletePendingInstance(user.id, data.id)
+  revalidatePath('/app')
+}
+
 export const updateInstanceStatusAction = async (
   input: UpdateInstanceStatusInput
 ) => {
@@ -59,4 +67,11 @@ export const regenerateInstanceQrAction = async (input: InstanceIdInput) => {
   const instance = await instanceService.regenerateQr(user.id, data.id)
   revalidatePath('/app')
   return instance
+}
+
+export const sendInstanceTestMessageAction = async (input: InstanceIdInput) => {
+  const user = await requireSession()
+  const data = instanceIdSchema.parse(input)
+
+  return instanceService.sendTestMessage(user.id, data.id)
 }
