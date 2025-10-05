@@ -6,6 +6,7 @@ import {
   removeFirestoreAuthState,
   useFirestoreAuthState
 } from '@/lib/services/firestore-auth-state'
+import { instanceRepository } from '@/lib/repositories/instance-repository'
 
 type BaileysModule = typeof import('@whiskeysockets/baileys')
 type WASocket = import('@whiskeysockets/baileys').WASocket
@@ -35,6 +36,115 @@ interface SessionHandlers {
       | { reason: 'closed'; error: Error; details?: unknown }
       | { reason: 'ended' }
   ) => Promise<void> | void
+}
+
+const DEFAULT_HANDLERS_APPLIED = Symbol('DEFAULT_HANDLERS_APPLIED')
+
+type SessionHandlersWithDefaults = SessionHandlers & {
+  [DEFAULT_HANDLERS_APPLIED]?: true
+}
+
+const createDefaultHandlers = (sessionId: string): SessionHandlers => ({
+  onQr: async (qrCode) => {
+    if (!qrCode) return
+    try {
+      await instanceRepository.updateStatus(sessionId, 'pending', qrCode)
+    } catch (error) {
+      console.error('[whatsappService.defaultHandlers.onQr]', error)
+    }
+  },
+  onConnected: async () => {
+    try {
+      await instanceRepository.updateStatus(sessionId, 'connected', null)
+    } catch (error) {
+      console.error('[whatsappService.defaultHandlers.onConnected]', error)
+    }
+  },
+  onClose: async ({ reason }) => {
+    if (reason === 'closed' || reason === 'ended') {
+      try {
+        await instanceRepository.updateStatus(sessionId, 'disconnected', null)
+      } catch (error) {
+        console.error('[whatsappService.defaultHandlers.onClose]', error)
+      }
+    }
+  }
+})
+
+const mergeHandlers = (...handlersList: SessionHandlers[]): SessionHandlers => {
+  const onQrHandlers = handlersList
+    .map((handler) => handler?.onQr)
+    .filter(
+      (handler): handler is NonNullable<SessionHandlers['onQr']> =>
+        typeof handler === 'function'
+    )
+
+  const onConnectedHandlers = handlersList
+    .map((handler) => handler?.onConnected)
+    .filter(
+      (handler): handler is NonNullable<SessionHandlers['onConnected']> =>
+        typeof handler === 'function'
+    )
+
+  const onCloseHandlers = handlersList
+    .map((handler) => handler?.onClose)
+    .filter(
+      (handler): handler is NonNullable<SessionHandlers['onClose']> =>
+        typeof handler === 'function'
+    )
+
+  return {
+    onQr:
+      onQrHandlers.length > 0
+        ? async (qrCode) => {
+            for (const handler of onQrHandlers) {
+              try {
+                await handler(qrCode)
+              } catch (error) {
+                console.error('[whatsappService.handlers.onQr]', error)
+              }
+            }
+          }
+        : undefined,
+    onConnected:
+      onConnectedHandlers.length > 0
+        ? async () => {
+            for (const handler of onConnectedHandlers) {
+              try {
+                await handler()
+              } catch (error) {
+                console.error('[whatsappService.handlers.onConnected]', error)
+              }
+            }
+          }
+        : undefined,
+    onClose:
+      onCloseHandlers.length > 0
+        ? async (payload) => {
+            for (const handler of onCloseHandlers) {
+              try {
+                await handler(payload)
+              } catch (error) {
+                console.error('[whatsappService.handlers.onClose]', error)
+              }
+            }
+          }
+        : undefined
+  }
+}
+
+const withDefaultHandlers = (
+  sessionId: string,
+  handlers: SessionHandlers
+): SessionHandlers => {
+  const typedHandlers = handlers as SessionHandlersWithDefaults
+  if (typedHandlers?.[DEFAULT_HANDLERS_APPLIED]) {
+    return handlers
+  }
+
+  const combined = mergeHandlers(createDefaultHandlers(sessionId), handlers)
+  ;(combined as SessionHandlersWithDefaults)[DEFAULT_HANDLERS_APPLIED] = true
+  return combined
 }
 
 interface Deferred<T> {
@@ -124,23 +234,26 @@ const ensureSession = async (
   handlers: SessionHandlers = {},
   options: { forceNew?: boolean } = {}
 ): Promise<ManagedSession> => {
+  const customHandlersProvided = hasHandlers(handlers)
+  const normalizedHandlers = withDefaultHandlers(sessionId, handlers)
+
   if (options.forceNew) {
     await teardownSession(sessionId, { keepCreds: false })
   } else {
     const existing = sessions.get(sessionId)
     if (existing) {
-      if (hasHandlers(handlers)) {
-        existing.handlers = handlers
+      if (customHandlersProvided) {
+        existing.handlers = normalizedHandlers
       }
       return existing
     }
 
     const pending = sessionPromises.get(sessionId)
     if (pending) {
-      if (hasHandlers(handlers)) {
+      if (customHandlersProvided) {
         pending
           .then((session) => {
-            session.handlers = handlers
+            session.handlers = normalizedHandlers
           })
           .catch(() => {
             // ignored on purpose
@@ -150,7 +263,7 @@ const ensureSession = async (
     }
   }
 
-  const creation = createManagedSession(sessionId, handlers)
+  const creation = createManagedSession(sessionId, normalizedHandlers)
   sessionPromises.set(sessionId, creation)
 
   try {
