@@ -114,7 +114,7 @@ export default async function InstanceDetailsPage({
             <CardContent>
               <pre className="overflow-x-auto rounded-lg border border-slate-200 bg-slate-950 p-4 text-xs text-slate-100 dark:border-slate-700">
                 {`{
-  "to": "5215512345678",
+  "to": "525512345678",
   "content": {
     "text": "Hola desde la API"
   }
@@ -147,7 +147,7 @@ export default async function InstanceDetailsPage({
     'x-api-key': '${instance.apiKey}'
   },
   body: JSON.stringify({
-    to: '5215512345678',
+    to: '525512345678',
     content: {
       text: 'Hola desde la API'
     }
