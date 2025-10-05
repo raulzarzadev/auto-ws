@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -47,7 +47,32 @@ const initialValues: LoginValues = {
   email: ''
 }
 
-export default function LoginPage() {
+const LoginPageFallback = () => (
+  <div className="flex min-h-screen flex-col items-center justify-center bg-[hsl(var(--background))] px-6 py-10">
+    <Card className="w-full max-w-md border-slate-200/70 shadow-lg dark:border-slate-800">
+      <CardHeader className="space-y-2 text-center">
+        <CardTitle className="text-2xl font-semibold">
+          Cargando formulario…
+        </CardTitle>
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          Preparando la verificación segura de acceso.
+        </p>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-3">
+          <div className="h-10 w-full animate-pulse rounded-md bg-slate-200 dark:bg-slate-700" />
+          <div className="h-10 w-full animate-pulse rounded-md bg-slate-200 dark:bg-slate-700" />
+          <div className="h-10 w-full animate-pulse rounded-md bg-slate-200 dark:bg-slate-700" />
+        </div>
+      </CardContent>
+      <CardFooter>
+        <div className="h-10 w-full animate-pulse rounded-md bg-slate-200 dark:bg-slate-700" />
+      </CardFooter>
+    </Card>
+  </div>
+)
+
+const LoginPageContent = () => {
   const router = useRouter()
   const params = useSearchParams()
   const redirect = params.get('redirect') ?? '/app'
@@ -260,5 +285,13 @@ export default function LoginPage() {
         </Card>
       </ErrorBoundary>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginPageFallback />}>
+      <LoginPageContent />
+    </Suspense>
   )
 }
