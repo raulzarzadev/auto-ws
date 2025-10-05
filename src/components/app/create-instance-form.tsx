@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Formik, Form, Field } from 'formik'
+import type { FieldProps } from 'formik'
 
 import {
   Card,
@@ -14,6 +15,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
+import { PhoneNumberInput } from '@/components/ui/phone-input'
 import { zodToFormikValidate } from '@/lib/forms/zodAdapter'
 import { createInstanceAction } from '@/lib/trpc/actions'
 import {
@@ -90,15 +92,21 @@ export const CreateInstanceForm = ({ onCreated }: CreateInstanceFormProps) => {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="phoneNumber">Número vinculado</Label>
-                <Field
-                  as={Input}
-                  id="phoneNumber"
-                  name="phoneNumber"
-                  placeholder="52 55 1234 5678"
-                  aria-invalid={
-                    touched.phoneNumber && Boolean(errors.phoneNumber)
-                  }
-                />
+                <Field name="phoneNumber">
+                  {({ field, form }: FieldProps<string>) => (
+                    <PhoneNumberInput
+                      id="phoneNumber"
+                      name={field.name}
+                      value={field.value || undefined}
+                      onChange={(value: string | undefined) =>
+                        form.setFieldValue(field.name, value ?? '')
+                      }
+                      onBlur={() => form.setFieldTouched(field.name, true)}
+                      placeholder="52 55 1234 5678"
+                      error={touched.phoneNumber && Boolean(errors.phoneNumber)}
+                    />
+                  )}
+                </Field>
                 {touched.phoneNumber && errors.phoneNumber ? (
                   <p className="text-sm text-red-600" role="alert">
                     {errors.phoneNumber}

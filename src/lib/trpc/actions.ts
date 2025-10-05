@@ -8,9 +8,11 @@ import { instanceService } from '@/lib/services/instance-service'
 import {
   CreateInstanceInput,
   InstanceIdInput,
+  SendTestMessageInput,
   UpdateInstanceStatusInput,
   createInstanceSchema,
   instanceIdSchema,
+  sendTestMessageSchema,
   updateInstanceStatusSchema
 } from '@/lib/validators/instance'
 
@@ -69,9 +71,11 @@ export const regenerateInstanceQrAction = async (input: InstanceIdInput) => {
   return instance
 }
 
-export const sendInstanceTestMessageAction = async (input: InstanceIdInput) => {
+export const sendInstanceTestMessageAction = async (
+  input: SendTestMessageInput
+) => {
   const user = await requireSession()
-  const data = instanceIdSchema.parse(input)
+  const data = sendTestMessageSchema.parse(input)
 
-  return instanceService.sendTestMessage(user.id, data.id)
+  return instanceService.sendTestMessage(user.id, data)
 }

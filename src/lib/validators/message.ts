@@ -1,5 +1,10 @@
 import { z } from 'zod'
 
+import {
+  ensureWhatsAppJid,
+  formatPhoneNumberForWhatsApp
+} from '@/lib/phone/whatsapp'
+
 export const sendMessageSchema = z
   .object({
     to: z.string().trim().optional(),
@@ -14,7 +19,9 @@ export const sendMessageSchema = z
 type SendMessageInput = z.infer<typeof sendMessageSchema>
 
 export const normalizeMessageInput = (input: SendMessageInput) => {
-  const jid = input.jid ?? normalizeToJid(input.to as string)
+  const jid = input.jid
+    ? ensureWhatsAppJid(input.jid)
+    : formatPhoneNumberForWhatsApp(input.to as string).jid
   const messageContent =
     typeof input.content === 'string'
       ? { text: input.content }
@@ -25,12 +32,4 @@ export const normalizeMessageInput = (input: SendMessageInput) => {
     content: messageContent,
     options: input.options as Record<string, unknown> | undefined
   }
-}
-
-const normalizeToJid = (value: string) => {
-  const normalized = value.replace(/[^0-9]/g, '').replace(/^0+/, '')
-
-  return normalized.endsWith('@s.whatsapp.net')
-    ? normalized
-    : `${normalized}@s.whatsapp.net`
 }

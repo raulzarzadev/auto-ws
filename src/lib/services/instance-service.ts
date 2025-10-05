@@ -4,8 +4,10 @@ import { instanceRepository } from '@/lib/repositories/instance-repository'
 import { WhatsAppInstance } from '@/lib/types'
 import {
   CreateInstanceInput,
+  SendTestMessageInput,
   createInstanceSchema
 } from '@/lib/validators/instance'
+import { formatPhoneNumberForWhatsApp } from '@/lib/phone/whatsapp'
 
 export const instanceService = {
   listForOwner: (ownerId: string) => instanceRepository.listByOwner(ownerId),
@@ -192,8 +194,8 @@ export const instanceService = {
 
     return latest
   },
-  async sendTestMessage(ownerId: string, instanceId: string) {
-    const instance = await instanceRepository.findById(instanceId)
+  async sendTestMessage(ownerId: string, input: SendTestMessageInput) {
+    const instance = await instanceRepository.findById(input.id)
     if (!instance || instance.ownerId !== ownerId) {
       throw new Error('INSTANCE_NOT_FOUND')
     }
@@ -208,7 +210,7 @@ export const instanceService = {
         ? rawMetadataRecipient.trim()
         : undefined
 
-    const recipient = metadataRecipient ?? instance.phoneNumber
+    const recipient = input.phone ?? metadataRecipient ?? instance.phoneNumber
 
     if (!recipient) {
       throw new Error(
@@ -216,26 +218,23 @@ export const instanceService = {
       )
     }
 
-    const jid = formatToJid(recipient)
+    const { jid } = formatPhoneNumberForWhatsApp(recipient, {
+      defaultCountry: 'MX'
+    })
 
     const { sendWhatsAppMessage } = await import(
       '@/lib/services/whatsapp-service'
     )
 
-    return sendWhatsAppMessage(instanceId, jid, {
-      text: `Mensaje de prueba desde ${instance.label}.`
+    const messageContent =
+      input.content && input.content.trim().length > 0
+        ? input.content
+        : `Mensaje de prueba desde ${instance.label}.`
+
+    return sendWhatsAppMessage(instance.id, jid, {
+      text: messageContent
     })
   }
-}
-
-const formatToJid = (value: string) => {
-  const trimmed = value.trim()
-  if (trimmed.endsWith('@s.whatsapp.net')) {
-    return trimmed
-  }
-
-  const digits = trimmed.replace(/[^0-9]/g, '').replace(/^0+/, '')
-  return `${digits}@s.whatsapp.net`
 }
 
 const mapWhatsAppCreationError = (error: unknown) => {

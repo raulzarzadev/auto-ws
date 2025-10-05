@@ -1,6 +1,7 @@
 'use client'
 
-import { useCallback, useMemo, useState, useTransition } from 'react'
+import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
+import { createPortal } from 'react-dom'
 
 import { SummaryCard } from '@/components/admin/summary-cards'
 import { CreateInstanceForm } from '@/components/app/create-instance-form'
@@ -9,6 +10,7 @@ import {
   UserInstancesTable
 } from '@/components/app/instances-table'
 import { Button } from '@/components/ui/button'
+import { PhoneNumberInput } from '@/components/ui/phone-input'
 import {
   Card,
   CardContent,
@@ -16,6 +18,8 @@ import {
   CardHeader,
   CardTitle
 } from '@/components/ui/card'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
 import { fromNow } from '@/lib/date'
 import { WhatsAppInstance } from '@/lib/types'
 import {
@@ -41,6 +45,11 @@ type Feedback = {
   message: string
 } | null
 
+type TestMessageFormValues = {
+  phone: string
+  content: string
+}
+
 export const UserDashboardClient = ({
   initialInstances
 }: UserDashboardClientProps) => {
@@ -52,6 +61,19 @@ export const UserDashboardClient = ({
   const [pendingAction, setPendingAction] = useState<PendingAction>(null)
   const [isRefreshing, startRefreshing] = useTransition()
   const [isMutating, startMutating] = useTransition()
+  const [testModalInstance, setTestModalInstance] =
+    useState<WhatsAppInstance | null>(null)
+  const [testModalError, setTestModalError] = useState<string | null>(null)
+  const [testFormValues, setTestFormValues] = useState<TestMessageFormValues>(
+    () => ({ phone: '', content: '' })
+  )
+  const [isSendingTest, setIsSendingTest] = useState(false)
+
+  useEffect(() => {
+    if (!testModalInstance && pendingAction?.type === 'test-message') {
+      setPendingAction(null)
+    }
+  }, [pendingAction?.type, testModalInstance])
 
   const summary = useMemo(() => {
     const total = instances.length
@@ -192,32 +214,18 @@ export const UserDashboardClient = ({
 
   const handleSendTestMessage = useCallback(
     (id: string) => {
+      const instance = instances.find((item) => item.id === id)
+      if (!instance) return
+
       setPendingAction({ id, type: 'test-message' })
-      startMutating(() => {
-        void (async () => {
-          try {
-            await sendInstanceTestMessageAction({ id })
-            markUpdated()
-            setFeedback({
-              type: 'success',
-              message: 'Enviamos un mensaje de prueba al número configurado.'
-            })
-          } catch (error) {
-            console.error(error)
-            setFeedback({
-              type: 'error',
-              message:
-                error instanceof Error
-                  ? error.message
-                  : 'No pudimos enviar el mensaje de prueba.'
-            })
-          } finally {
-            setPendingAction(null)
-          }
-        })()
+      setTestModalInstance(instance)
+      setTestModalError(null)
+      setTestFormValues({
+        phone: instance.phoneNumber ?? '',
+        content: `Mensaje de prueba desde ${instance.label}.`
       })
     },
-    [markUpdated]
+    [instances]
   )
 
   const handleInstanceSynced = useCallback(
@@ -247,6 +255,71 @@ export const UserDashboardClient = ({
     },
     [markUpdated]
   )
+
+  const handleCloseTestModal = useCallback(() => {
+    setTestModalInstance(null)
+    setTestModalError(null)
+    setIsSendingTest(false)
+  }, [])
+
+  const handleTestValueChange = useCallback(
+    (field: keyof TestMessageFormValues, value: string) => {
+      setTestFormValues((prev) => ({ ...prev, [field]: value }))
+    },
+    []
+  )
+
+  const handleSubmitTestMessage = useCallback(async () => {
+    if (!testModalInstance) return
+
+    const phone = testFormValues.phone.trim()
+    const content = testFormValues.content.trim()
+
+    if (!phone) {
+      setTestModalError('Ingresa un número de teléfono válido.')
+      return
+    }
+
+    if (!content) {
+      setTestModalError('Ingresa un mensaje de prueba.')
+      return
+    }
+
+    setIsSendingTest(true)
+    setTestModalError(null)
+    setPendingAction({ id: testModalInstance.id, type: 'test-message' })
+
+    try {
+      await sendInstanceTestMessageAction({
+        id: testModalInstance.id,
+        phone,
+        content
+      })
+      markUpdated()
+      setFeedback({
+        type: 'success',
+        message: 'Mensaje de prueba enviado correctamente.'
+      })
+      handleCloseTestModal()
+    } catch (error) {
+      console.error(error)
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'No pudimos enviar el mensaje de prueba.'
+      setTestModalError(message)
+      setFeedback({ type: 'error', message })
+    } finally {
+      setIsSendingTest(false)
+      setPendingAction(null)
+    }
+  }, [
+    handleCloseTestModal,
+    markUpdated,
+    testFormValues.content,
+    testFormValues.phone,
+    testModalInstance
+  ])
 
   return (
     <div className="flex flex-col gap-10">
@@ -358,6 +431,149 @@ export const UserDashboardClient = ({
           isMutating={isMutating}
         />
       </section>
+      <TestMessageModal
+        instance={testModalInstance}
+        open={Boolean(testModalInstance)}
+        values={testFormValues}
+        error={testModalError}
+        isSubmitting={isSendingTest}
+        onClose={handleCloseTestModal}
+        onChange={handleTestValueChange}
+        onSubmit={handleSubmitTestMessage}
+      />
     </div>
+  )
+}
+
+interface TestMessageModalProps {
+  instance: WhatsAppInstance | null
+  open: boolean
+  values: TestMessageFormValues
+  error: string | null
+  isSubmitting: boolean
+  onClose: () => void
+  onChange: (field: keyof TestMessageFormValues, value: string) => void
+  onSubmit: () => void
+}
+
+const TestMessageModal = ({
+  instance,
+  open,
+  values,
+  error,
+  isSubmitting,
+  onClose,
+  onChange,
+  onSubmit
+}: TestMessageModalProps) => {
+  useEffect(() => {
+    if (!open) return
+
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose()
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [open, onClose])
+
+  if (!open || !instance) {
+    return null
+  }
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-slate-800 dark:bg-slate-950">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1">
+            <h3 className="text-lg font-semibold">Mensaje de prueba</h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              Envía un mensaje rápido a un número específico para verificar la
+              instancia.
+            </p>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onClose}
+            className="text-slate-500 hover:text-slate-900 dark:hover:text-slate-100"
+            type="button"
+          >
+            Cerrar
+          </Button>
+        </div>
+
+        <form
+          className="mt-6 space-y-4"
+          onSubmit={(event) => {
+            event.preventDefault()
+            onSubmit()
+          }}
+        >
+          <div className="space-y-2">
+            <Label htmlFor="test-message-phone">Número de teléfono</Label>
+            <PhoneNumberInput
+              id="test-message-phone"
+              name="test-phone"
+              value={values.phone ? values.phone : undefined}
+              onChange={(value: string | undefined) =>
+                onChange('phone', value ?? '')
+              }
+              placeholder="52 55 1234 5678"
+              error={Boolean(error)}
+            />
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Para números de México agregaremos el dígito adicional requerido
+              automáticamente.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="test-message-content">Mensaje</Label>
+            <Textarea
+              id="test-message-content"
+              value={values.content}
+              onChange={(event) => onChange('content', event.target.value)}
+              placeholder="Hola, esto es un mensaje de prueba."
+              maxLength={500}
+              rows={4}
+            />
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Mantén el mensaje corto y claro; máximo 500 caracteres.
+            </p>
+          </div>
+
+          {error ? (
+            <p className="text-sm text-red-600" role="alert">
+              {error}
+            </p>
+          ) : null}
+
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={onClose}
+              disabled={isSubmitting}
+            >
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? 'Enviando...' : 'Enviar mensaje'}
+            </Button>
+          </div>
+        </form>
+      </div>
+    </div>,
+    document.body
   )
 }
