@@ -14,18 +14,17 @@ const textEncoder = new TextEncoder()
 const serializeEvent = (event: string, payload: unknown = {}) =>
   `event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`
 
-const startSessionStream = async (
-  request: Request,
-  params: { id: string }
-) => {
+const startSessionStream = async (request: Request, params: { id: string }) => {
   const user = await requireSession()
   const instanceId = params.id
 
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
-      let session: Awaited<
-        ReturnType<typeof instanceService.startInteractive>
-      >['session'] | null = null
+      let session:
+        | Awaited<
+            ReturnType<typeof instanceService.startInteractive>
+          >['session']
+        | null = null
       let closed = false
       let heartbeat: NodeJS.Timeout | null = null
 
@@ -60,7 +59,6 @@ const startSessionStream = async (
       }
 
       request.signal.addEventListener('abort', abort)
-
       ;(async () => {
         try {
           const result = await instanceService.startInteractive(
