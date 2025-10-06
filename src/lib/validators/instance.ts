@@ -10,7 +10,7 @@ export const createInstanceSchema = z.object({
 
 export const updateInstanceStatusSchema = z.object({
   id: z.string().min(1),
-  status: z.enum(['pending', 'connected', 'disconnected'])
+  status: z.enum(['disconnected'])
 })
 
 export const sendTestMessageSchema = z.object({

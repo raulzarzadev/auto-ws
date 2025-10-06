@@ -34,59 +34,22 @@ export const instanceService = {
       label: data.label,
       phoneNumber: data.phoneNumber
     })
+    return instance
+  },
+  async start(ownerId: string, instanceId: string) {
+    const instance = await instanceRepository.findById(instanceId)
+    if (!instance || instance.ownerId !== ownerId) {
+      throw new Error('INSTANCE_NOT_FOUND')
+    }
+
+    if (instance.status === 'connected') {
+      throw new Error('INSTANCE_ALREADY_CONNECTED')
+    }
+
     try {
-      const { createWhatsAppSession } = await import(
-        '@/lib/services/whatsapp-service'
-      )
-
-      const session = await createWhatsAppSession(instance.id, {
-        onQr: async (qrCode) => {
-          await instanceRepository.updateStatus(instance.id, 'pending', qrCode)
-        },
-        onConnected: async () => {
-          const updated = await instanceRepository.updateStatus(
-            instance.id,
-            'connected',
-            null
-          )
-
-          if (!updated.apiKey) {
-            await instanceRepository.ensureApiKey(updated.id)
-          }
-        },
-        onClose: async ({ reason }) => {
-          if (reason === 'closed') {
-            await instanceRepository.updateStatus(
-              instance.id,
-              'disconnected',
-              null
-            )
-          }
-        }
-      })
-
-      session.completion.catch((error) => {
-        console.error('[instanceService.create][session]', error)
-      })
-
-      await session.firstQr
-
-      const latest = await instanceRepository.findById(instance.id)
-      if (!latest) {
-        throw new Error('INSTANCE_NOT_FOUND')
-      }
-
-      if (latest.status === 'connected' && !latest.apiKey) {
-        const apiKey = await instanceRepository.ensureApiKey(latest.id)
-        if (apiKey) {
-          return { ...latest, apiKey }
-        }
-      }
-
-      return latest
+      return await startWhatsAppSession(instance.id)
     } catch (error) {
-      console.error('[instanceService.create]', error)
-      await instanceRepository.delete(instance.id)
+      console.error('[instanceService.start]', error)
       throw new Error(mapWhatsAppCreationError(error))
     }
   },
@@ -115,11 +78,14 @@ export const instanceService = {
       throw new Error('INSTANCE_NOT_FOUND')
     }
 
-    const qrCode = status === 'pending' ? instance.qrCode ?? null : null
+    if (status !== 'disconnected') {
+      throw new Error('STATUS_UPDATE_NOT_SUPPORTED')
+    }
+
     const updated = await instanceRepository.updateStatus(
       instanceId,
       status,
-      qrCode
+      null
     )
 
     if (status === 'disconnected') {
@@ -143,56 +109,53 @@ export const instanceService = {
     if (!instance || instance.ownerId !== ownerId) {
       throw new Error('INSTANCE_NOT_FOUND')
     }
+    if (instance.status === 'connected') {
+      throw new Error('INSTANCE_ALREADY_CONNECTED')
+    }
 
-    const { createWhatsAppSession } = await import(
-      '@/lib/services/whatsapp-service'
-    )
-
-    const session = await createWhatsAppSession(instanceId, {
-      onQr: async (qrCode) => {
-        await instanceRepository.updateStatus(instanceId, 'pending', qrCode)
-      },
-      onConnected: async () => {
-        const updated = await instanceRepository.updateStatus(
-          instanceId,
-          'connected',
-          null
-        )
-
-        if (!updated.apiKey) {
-          await instanceRepository.ensureApiKey(updated.id)
-        }
-      },
-      onClose: async ({ reason }) => {
-        if (reason === 'closed') {
-          await instanceRepository.updateStatus(
-            instanceId,
-            'disconnected',
-            null
-          )
-        }
-      }
-    })
-
-    session.completion.catch((error) => {
-      console.error('[instanceService.regenerateQr][session]', error)
-    })
-
-    await session.firstQr
-
-    const latest = await instanceRepository.findById(instanceId)
-    if (!latest) {
+    try {
+      return await startWhatsAppSession(instance.id)
+    } catch (error) {
+      console.error('[instanceService.regenerateQr]', error)
+      throw new Error(mapWhatsAppCreationError(error))
+    }
+  },
+  async requestPairingCode(ownerId: string, instanceId: string) {
+    const instance = await instanceRepository.findById(instanceId)
+    if (!instance || instance.ownerId !== ownerId) {
       throw new Error('INSTANCE_NOT_FOUND')
     }
 
-    if (latest.status === 'connected' && !latest.apiKey) {
-      const apiKey = await instanceRepository.ensureApiKey(latest.id)
-      if (apiKey) {
-        return { ...latest, apiKey }
-      }
+    if (instance.status !== 'pending') {
+      throw Object.assign(
+        new Error('La instancia debe estar encendida para generar el código.'),
+        { code: 'WA_PAIRING_NOT_PENDING' }
+      )
     }
 
-    return latest
+    if (!instance.phoneNumber) {
+      throw Object.assign(
+        new Error('Configura un número de teléfono antes de generar el código.'),
+        { code: 'WA_PAIRING_PHONE_MISSING' }
+      )
+    }
+
+    const { digits } = formatPhoneNumberForWhatsApp(instance.phoneNumber, {
+      defaultCountry: 'MX'
+    })
+
+    try {
+      const { requestWhatsAppPairingCode } = await import(
+        '@/lib/services/whatsapp-service'
+      )
+
+      const code = await requestWhatsAppPairingCode(instance.id, digits)
+
+      return { code }
+    } catch (error) {
+      console.error('[instanceService.requestPairingCode]', error)
+      throw new Error(mapPairingCodeError(error))
+    }
   },
   async sendTestMessage(ownerId: string, input: SendTestMessageInput) {
     const instance = await instanceRepository.findById(input.id)
@@ -235,6 +198,106 @@ export const instanceService = {
       text: messageContent
     })
   }
+}
+
+const startWhatsAppSession = async (instanceId: string) => {
+  await instanceRepository.updateStatus(instanceId, 'pending', null)
+
+  try {
+    const { createWhatsAppSession } = await import(
+      '@/lib/services/whatsapp-service'
+    )
+
+    const session = await createWhatsAppSession(instanceId, {
+      onQr: async (qrCode) => {
+        await instanceRepository.updateStatus(instanceId, 'pending', qrCode)
+      },
+      onConnected: async () => {
+        const updated = await instanceRepository.updateStatus(
+          instanceId,
+          'connected',
+          null
+        )
+
+        if (!updated.apiKey) {
+          await instanceRepository.ensureApiKey(updated.id)
+        }
+      },
+      onClose: async ({ reason }) => {
+        if (reason === 'closed' || reason === 'ended') {
+          await instanceRepository.updateStatus(
+            instanceId,
+            'disconnected',
+            null
+          )
+        }
+      }
+    })
+
+    session.completion.catch((error) => {
+      console.error(`[instanceService.session:${instanceId}]`, error)
+    })
+
+    await session.firstQr
+
+    const latest = await instanceRepository.findById(instanceId)
+    if (!latest) {
+      throw new Error('INSTANCE_NOT_FOUND')
+    }
+
+    if (latest.status === 'connected' && !latest.apiKey) {
+      const apiKey = await instanceRepository.ensureApiKey(latest.id)
+      if (apiKey) {
+        return { ...latest, apiKey }
+      }
+    }
+
+    return latest
+  } catch (error) {
+    try {
+      await instanceRepository.updateStatus(instanceId, 'disconnected', null)
+    } catch (resetError) {
+      console.error('[instanceService.start.reset]', resetError)
+    }
+
+    throw error
+  }
+}
+
+const mapPairingCodeError = (error: unknown) => {
+  if (error && typeof error === 'object') {
+    const code = (error as { code?: unknown }).code
+
+    if (code === 'WA_PAIRING_SESSION_INACTIVE') {
+      return 'Primero enciende la instancia para generar el código.'
+    }
+
+    if (code === 'WA_PAIRING_UNSUPPORTED') {
+      return 'Este método de vinculación no está disponible por ahora.'
+    }
+
+    if (code === 'WA_PAIRING_INVALID_PHONE') {
+      return 'El número configurado no es válido para generar el código.'
+    }
+
+    if (code === 'WA_PAIRING_NOT_PENDING') {
+      return 'Enciende la instancia para obtener un nuevo código.'
+    }
+
+    if (code === 'WA_PAIRING_PHONE_MISSING') {
+      return 'Configura un número de teléfono en la instancia antes de solicitar el código.'
+    }
+
+    if (code === 'WA_PAIRING_REQUEST_FAILED') {
+      return 'No pudimos obtener el código de vinculación. Intenta nuevamente en unos segundos.'
+    }
+  }
+
+  if (error instanceof Error && error.message) {
+    return error.message
+  }
+
+  return 'No pudimos generar el código de vinculación. Intenta nuevamente.'
 }
 
 const mapWhatsAppCreationError = (error: unknown) => {

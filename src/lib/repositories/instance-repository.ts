@@ -41,7 +41,7 @@ export const instanceRepository = {
       id,
       ownerId: payload.ownerId,
       label: payload.label,
-      status: payload.status ?? 'pending',
+      status: payload.status ?? 'disconnected',
       qrCode: payload.qrCode ?? null,
       phoneNumber: payload.phoneNumber,
       createdAt: now,

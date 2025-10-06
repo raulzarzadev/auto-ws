@@ -42,8 +42,9 @@ export const CreateInstanceForm = ({ onCreated }: CreateInstanceFormProps) => {
       <CardHeader>
         <CardTitle>Crea una nueva instancia</CardTitle>
         <CardDescription>
-          Genera una sesión vinculada a tu cuenta para empezar a automatizar tus
-          mensajes. Recibirás un código QR para enlazar tu dispositivo.
+          Genera una sesión vinculada a tu cuenta y enciéndela cuando estés
+          listo. Podrás vincular tu dispositivo escaneando un QR o usando un
+          código numérico.
         </CardDescription>
       </CardHeader>
       <Formik<CreateInstanceInput>
@@ -56,7 +57,7 @@ export const CreateInstanceForm = ({ onCreated }: CreateInstanceFormProps) => {
             const instance = await createInstanceAction(values)
             onCreated(instance)
             setServerSuccess(
-              'Instancia generada correctamente. Escanea el QR para conectarte.'
+              'Instancia creada. Enciéndela desde el panel para generar un QR o código de enlace.'
             )
             resetForm()
           } catch (error) {

@@ -25,19 +25,15 @@ import { WhatsAppInstance } from '@/lib/types'
 import {
   deleteInstanceAction,
   fetchUserInstancesAction,
+  requestInstancePairingCodeAction,
   regenerateInstanceQrAction,
+  startInstanceAction,
   sendInstanceTestMessageAction,
   updateInstanceStatusAction
 } from '@/lib/trpc/actions'
 
 interface UserDashboardClientProps {
   initialInstances: WhatsAppInstance[]
-}
-
-const statusMessage: Record<WhatsAppInstance['status'], string> = {
-  connected: 'Instancia marcada como conectada',
-  pending: 'Instancia en espera de conexión',
-  disconnected: 'Instancia marcada como desconectada'
 }
 
 type Feedback = {
@@ -121,14 +117,14 @@ export const UserDashboardClient = ({
       setFeedback({
         type: 'success',
         message:
-          'Instancia creada correctamente. Recuerda escanear el QR para finalizar la conexión.'
+          'Instancia creada. Enciéndela cuando quieras generar el QR o el código de vinculación.'
       })
     },
     [markUpdated]
   )
 
   const handleStatusChange = useCallback(
-    (id: string, status: WhatsAppInstance['status']) => {
+    (id: string, status: 'disconnected') => {
       setPendingAction({ id, type: 'status' })
       startMutating(() => {
         void (async () => {
@@ -138,13 +134,48 @@ export const UserDashboardClient = ({
               prev.map((item) => (item.id === updated.id ? updated : item))
             )
             markUpdated()
-            setFeedback({ type: 'success', message: statusMessage[status] })
+            setFeedback({
+              type: 'success',
+              message: 'Instancia apagada correctamente.'
+            })
           } catch (error) {
             console.error(error)
             setFeedback({
               type: 'error',
               message: 'No pudimos actualizar el estado de la instancia.'
             })
+          } finally {
+            setPendingAction(null)
+          }
+        })()
+      })
+    },
+    [markUpdated]
+  )
+
+  const handleStartInstance = useCallback(
+    (id: string) => {
+      setPendingAction({ id, type: 'start' })
+      startMutating(() => {
+        void (async () => {
+          try {
+            const updated = await startInstanceAction({ id })
+            setInstances((prev) =>
+              prev.map((item) => (item.id === updated.id ? updated : item))
+            )
+            markUpdated()
+            setFeedback({
+              type: 'success',
+              message:
+                'Encendimos la instancia. Abre el QR o solicita un código para vincularte.'
+            })
+          } catch (error) {
+            console.error(error)
+            const message =
+              error instanceof Error
+                ? error.message
+                : 'No pudimos encender la instancia.'
+            setFeedback({ type: 'error', message })
           } finally {
             setPendingAction(null)
           }
@@ -167,7 +198,8 @@ export const UserDashboardClient = ({
             markUpdated()
             setFeedback({
               type: 'success',
-              message: 'Generamos un nuevo QR. Escanéalo desde tu dispositivo.'
+              message:
+                'Reiniciamos la vinculación. Abre el QR o solicita un código numérico.'
             })
           } catch (error) {
             console.error(error)
@@ -181,6 +213,37 @@ export const UserDashboardClient = ({
         })()
       })
     },
+    [markUpdated]
+  )
+
+  const handleRequestPairingCode = useCallback(
+    (id: string) =>
+      new Promise<string>((resolve, reject) => {
+        setPendingAction({ id, type: 'pairing-code' })
+        startMutating(() => {
+          void (async () => {
+            try {
+              const { code } = await requestInstancePairingCodeAction({ id })
+              markUpdated()
+              setFeedback({
+                type: 'success',
+                message: 'Generamos un nuevo código de vinculación.'
+              })
+              resolve(code)
+            } catch (error) {
+              console.error(error)
+              const message =
+                error instanceof Error
+                  ? error.message
+                  : 'No pudimos generar el código de vinculación.'
+              setFeedback({ type: 'error', message })
+              reject(new Error(message))
+            } finally {
+              setPendingAction(null)
+            }
+          })()
+        })
+      }),
     [markUpdated]
   )
 
@@ -361,9 +424,9 @@ export const UserDashboardClient = ({
             description="Esperando escanear el código QR"
           />
           <SummaryCard
-            title="Desconectadas"
+            title="Apagadas"
             value={summary.disconnected}
-            description="Finalizadas o en pausa"
+            description="Instancias apagadas o en pausa"
           />
         </div>
       </section>
@@ -381,20 +444,20 @@ export const UserDashboardClient = ({
           <CardContent>
             <ol className="list-decimal space-y-3 pl-4 text-sm text-slate-600 dark:text-slate-300">
               <li>
-                Abre WhatsApp en tu teléfono y ve a la sección de dispositivos
-                vinculados.
+                Desde el panel, enciende la instancia cuando necesites vincular
+                un dispositivo.
               </li>
               <li>
-                Selecciona “Vincular dispositivo” y escanea el código QR
-                generado.
+                En WhatsApp abre la sección de dispositivos vinculados y toca
+                “Vincular dispositivo”.
               </li>
               <li>
-                Mantén tu teléfono con buena conectividad y energía para evitar
-                desconexiones inesperadas.
+                Escanea el QR del modal o ingresa el código numérico que
+                generamos para ti.
               </li>
               <li>
-                Si se pierde la conexión, usa “Regenerar QR” para crear una
-                nueva sesión segura.
+                Mantén tu teléfono con buena conectividad; si necesitas
+                reiniciar, usa “Reiniciar QR”.
               </li>
             </ol>
           </CardContent>
@@ -423,10 +486,12 @@ export const UserDashboardClient = ({
         <UserInstancesTable
           instances={instances}
           onStatusChange={handleStatusChange}
+          onStart={handleStartInstance}
           onRegenerate={handleRegenerate}
           onInstanceUpdate={handleInstanceSynced}
           onDeleteInstance={handleDeleteInstance}
           onSendTestMessage={handleSendTestMessage}
+          onRequestPairingCode={handleRequestPairingCode}
           pendingAction={pendingAction}
           isMutating={isMutating}
         />

@@ -228,6 +228,42 @@ export const sendWhatsAppMessage = async (
   return session.socket.sendMessage(jid, content, options)
 }
 
+export const requestWhatsAppPairingCode = async (
+  sessionId: string,
+  phoneDigits: string
+) => {
+  const sanitized = phoneDigits.replace(/[^0-9]/g, '')
+
+  if (!sanitized) {
+    throw Object.assign(new Error('Invalid phone number for pairing'), {
+      code: 'WA_PAIRING_INVALID_PHONE'
+    })
+  }
+
+  const session = sessions.get(sessionId)
+
+  if (!session) {
+    throw Object.assign(new Error('Session is not active'), {
+      code: 'WA_PAIRING_SESSION_INACTIVE'
+    })
+  }
+
+  if (typeof session.socket.requestPairingCode !== 'function') {
+    throw Object.assign(new Error('Pairing code is not supported'), {
+      code: 'WA_PAIRING_UNSUPPORTED'
+    })
+  }
+
+  try {
+    return await session.socket.requestPairingCode(sanitized)
+  } catch (error) {
+    throw Object.assign(new Error('Failed to request pairing code'), {
+      code: 'WA_PAIRING_REQUEST_FAILED',
+      cause: error
+    })
+  }
+}
+
 const hasHandlers = (handlers: SessionHandlers) =>
   Boolean(handlers.onQr || handlers.onConnected || handlers.onClose)
 

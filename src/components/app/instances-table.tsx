@@ -20,7 +20,13 @@ import { firestore } from '@/config/firebase-client'
 import { fromNow } from '@/lib/date'
 import { WhatsAppInstance } from '@/lib/types'
 
-type ActionType = 'status' | 'regenerate' | 'delete' | 'test-message'
+type ActionType =
+  | 'status'
+  | 'regenerate'
+  | 'delete'
+  | 'test-message'
+  | 'start'
+  | 'pairing-code'
 
 export type PendingAction = {
   id: string
@@ -29,11 +35,13 @@ export type PendingAction = {
 
 interface UserInstancesTableProps {
   instances: WhatsAppInstance[]
-  onStatusChange: (id: string, status: WhatsAppInstance['status']) => void
+  onStatusChange: (id: string, status: 'disconnected') => void
+  onStart: (id: string) => void
   onRegenerate: (id: string) => void
   onInstanceUpdate: (instance: WhatsAppInstance) => void
   onDeleteInstance: (id: string) => void
   onSendTestMessage: (id: string) => void
+  onRequestPairingCode: (id: string) => Promise<string>
   pendingAction: PendingAction
   isMutating: boolean
 }
@@ -50,20 +58,25 @@ const statusVariant: Record<
 const statusLabel: Record<WhatsAppInstance['status'], string> = {
   connected: 'Conectada',
   pending: 'Pendiente',
-  disconnected: 'Desconectada'
+  disconnected: 'Apagada'
 }
 
 export const UserInstancesTable = ({
   instances,
   onStatusChange,
+  onStart,
   onRegenerate,
   onInstanceUpdate,
   onDeleteInstance,
   onSendTestMessage,
+  onRequestPairingCode,
   pendingAction,
   isMutating
 }: UserInstancesTableProps) => {
   const [modalInstanceId, setModalInstanceId] = useState<string | null>(null)
+  const [autoStartInstanceId, setAutoStartInstanceId] = useState<string | null>(
+    null
+  )
 
   const sortedInstances = useMemo(
     () =>
@@ -98,6 +111,35 @@ export const UserInstancesTable = ({
     setModalInstanceId(null)
   }, [])
 
+  useEffect(() => {
+    if (!autoStartInstanceId) {
+      return
+    }
+
+    if (
+      pendingAction &&
+      pendingAction.id === autoStartInstanceId &&
+      pendingAction.type === 'start'
+    ) {
+      return
+    }
+
+    const refreshedInstance = sortedInstances.find(
+      (item) => item.id === autoStartInstanceId
+    )
+
+    if (!refreshedInstance) {
+      setAutoStartInstanceId(null)
+      return
+    }
+
+    if (refreshedInstance.status === 'pending') {
+      setModalInstanceId(autoStartInstanceId)
+    }
+
+    setAutoStartInstanceId(null)
+  }, [autoStartInstanceId, pendingAction, sortedInstances])
+
   if (sortedInstances.length === 0) {
     return (
       <p className="text-sm text-slate-500">
@@ -113,6 +155,13 @@ export const UserInstancesTable = ({
           const isPending = instance.status === 'pending'
           const isConnected = instance.status === 'connected'
           const isDisconnected = instance.status === 'disconnected'
+          const isActionPending = (type: ActionType) =>
+            pendingAction?.id === instance.id && pendingAction.type === type
+          const isStarting = isActionPending('start')
+          const isRegenerating = isActionPending('regenerate')
+          const isDeleting = isActionPending('delete')
+          const isDisconnecting = isActionPending('status')
+          const isTesting = isActionPending('test-message')
 
           return (
             <Card
@@ -170,33 +219,15 @@ export const UserInstancesTable = ({
                   </p>
                 </div>
 
-                {isPending || isDisconnected ? (
-                  <div className="rounded-lg border border-dashed border-sky-300 bg-sky-50/60 p-4 text-sm text-sky-700 dark:border-sky-800 dark:bg-sky-900/30 dark:text-sky-200">
-                    <p className="font-medium">Generamos un nuevo QR.</p>
-                    <p className="mt-1 text-sky-600 dark:text-sky-100">
-                      Escanéalo desde tu dispositivo para completar la conexión.
+                {isConnected ? (
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-4 text-sm text-emerald-800 dark:border-emerald-400/40 dark:bg-emerald-900/20 dark:text-emerald-100">
+                    <p className="font-medium">
+                      Instancia conectada y lista para enviar mensajes.
                     </p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => setModalInstanceId(instance.id)}
-                      >
-                        Ver QR
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        disabled={isActionDisabled(instance.id, 'delete')}
-                        onClick={() => onDeleteInstance(instance.id)}
-                      >
-                        Eliminar instancia
-                      </Button>
-                    </div>
-                  </div>
-                ) : isConnected ? (
-                  <div>
-                    <div className="flex justify-end">
+                    <p className="mt-1 text-emerald-700/90 dark:text-emerald-100/80">
+                      Consulta los detalles de la API para integrar tus flujos.
+                    </p>
+                    <div className="mt-3 flex justify-end">
                       <Button asChild size="sm" variant="ghost">
                         <Link href={`/app/instances/${instance.id}`}>
                           Ver detalles de la API
@@ -204,25 +235,96 @@ export const UserInstancesTable = ({
                       </Button>
                     </div>
                   </div>
+                ) : isPending ? (
+                  <div className="rounded-lg border border-dashed border-sky-300 bg-sky-50/60 p-4 text-sm text-sky-700 dark:border-sky-800 dark:bg-sky-900/30 dark:text-sky-200">
+                    <p className="font-medium">
+                      Instancia encendida, esperando vinculación.
+                    </p>
+                    <p className="mt-1 text-sky-600 dark:text-sky-100">
+                      Abre el QR o solicita un código numérico para enlazar tu
+                      teléfono.
+                    </p>
+                  </div>
                 ) : (
-                  <p className="text-sm text-slate-500 dark:text-slate-400">
-                    No hay código QR activo para este estado. Puedes regenerarlo
-                    en caso de necesitar una nueva vinculación.
-                  </p>
+                  <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900/30 dark:text-slate-200">
+                    <p className="font-medium">Instancia apagada.</p>
+                    <p className="mt-1 text-slate-500 dark:text-slate-300">
+                      Enciéndela para generar un nuevo QR o un código de
+                      enlace.
+                    </p>
+                  </div>
                 )}
               </CardContent>
               <CardFooter className="flex flex-wrap justify-end gap-2">
-                {isPending ? null : isConnected ? (
-                  <div className="flex justify-between w-full">
+                {isDisconnected ? (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={isActionDisabled(instance.id, 'start')}
+                      onClick={() => {
+                        setAutoStartInstanceId(instance.id)
+                        onStart(instance.id)
+                      }}
+                    >
+                      {isStarting ? 'Encendiendo…' : 'Encender'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      disabled={isActionDisabled(instance.id, 'delete')}
+                      onClick={() => onDeleteInstance(instance.id)}
+                    >
+                      {isDeleting ? 'Eliminando…' : 'Eliminar'}
+                    </Button>
+                  </>
+                ) : null}
+
+                {isPending ? (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => setModalInstanceId(instance.id)}
+                    >
+                      Ver QR o código
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={isActionDisabled(instance.id, 'regenerate')}
+                      onClick={() => onRegenerate(instance.id)}
+                    >
+                      {isRegenerating ? 'Reiniciando…' : 'Reiniciar QR'}
+                    </Button>
                     <Button
                       size="sm"
                       variant="ghost"
                       disabled={isActionDisabled(instance.id, 'status')}
-                      onClick={() =>
-                        onStatusChange(instance.id, 'disconnected')
-                      }
+                      onClick={() => onStatusChange(instance.id, 'disconnected')}
                     >
-                      Desconectar
+                      {isDisconnecting ? 'Apagando…' : 'Apagar'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      disabled={isActionDisabled(instance.id, 'delete')}
+                      onClick={() => onDeleteInstance(instance.id)}
+                    >
+                      {isDeleting ? 'Eliminando…' : 'Eliminar'}
+                    </Button>
+                  </>
+                ) : null}
+
+                {isConnected ? (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={isActionDisabled(instance.id, 'status')}
+                      onClick={() => onStatusChange(instance.id, 'disconnected')}
+                    >
+                      {isDisconnecting ? 'Apagando…' : 'Apagar'}
                     </Button>
                     <Button
                       size="sm"
@@ -230,34 +332,11 @@ export const UserInstancesTable = ({
                       disabled={isActionDisabled(instance.id, 'test-message')}
                       onClick={() => onSendTestMessage(instance.id)}
                     >
-                      Enviar mensaje de prueba
+                      {isTesting
+                        ? 'Enviando…'
+                        : 'Enviar mensaje de prueba'}
                     </Button>
-                  </div>
-                ) : (
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    disabled={
-                      instance.status === 'connected' ||
-                      isActionDisabled(instance.id, 'status')
-                    }
-                    onClick={() => onStatusChange(instance.id, 'connected')}
-                  >
-                    Marcar conectada
-                  </Button>
-                )}
-                {isDisconnected ? (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={
-                      instance.status === 'connected' ||
-                      isActionDisabled(instance.id, 'regenerate')
-                    }
-                    onClick={() => onRegenerate(instance.id)}
-                  >
-                    Regenerar QR
-                  </Button>
+                  </>
                 ) : null}
               </CardFooter>
             </Card>
@@ -270,6 +349,8 @@ export const UserInstancesTable = ({
         open={Boolean(activeInstance)}
         onClose={handleModalClose}
         onInstanceUpdate={onInstanceUpdate}
+        onRequestPairingCode={onRequestPairingCode}
+        pendingAction={pendingAction}
       />
     </>
   )
@@ -280,15 +361,26 @@ interface QrModalProps {
   open: boolean
   onClose: () => void
   onInstanceUpdate: (instance: WhatsAppInstance) => void
+  onRequestPairingCode: (id: string) => Promise<string>
+  pendingAction: PendingAction
 }
 
 const QrModal = ({
   instance,
   open,
   onClose,
-  onInstanceUpdate
+  onInstanceUpdate,
+  onRequestPairingCode,
+  pendingAction
 }: QrModalProps) => {
   const [error, setError] = useState<string | null>(null)
+  const isPairingPending = Boolean(
+    instance &&
+      pendingAction?.id === instance.id &&
+      pendingAction.type === 'pairing-code'
+  )
+  const [pairingCode, setPairingCode] = useState<string | null>(null)
+  const [pairingError, setPairingError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!open) return
@@ -309,6 +401,13 @@ const QrModal = ({
       document.removeEventListener('keydown', handleKeyDown)
     }
   }, [open, onClose])
+
+  useEffect(() => {
+    if (!open) {
+      setPairingCode(null)
+      setPairingError(null)
+    }
+  }, [open])
 
   useEffect(() => {
     if (!open || !instance) {
@@ -340,11 +439,43 @@ const QrModal = ({
     }
   }, [open, instance, onInstanceUpdate])
 
+  useEffect(() => {
+    if (!instance) {
+      return
+    }
+
+    if (instance.status !== 'pending') {
+      setPairingCode(null)
+      setPairingError(null)
+    }
+  }, [instance])
+
+  const handleRequestPairingCode = useCallback(async () => {
+    if (!instance) {
+      return
+    }
+
+    try {
+      setPairingError(null)
+      const code = await onRequestPairingCode(instance.id)
+      setPairingCode(code)
+    } catch (error) {
+      setPairingCode(null)
+      setPairingError(
+        error instanceof Error
+          ? error.message
+          : 'No pudimos generar el código de enlace.'
+      )
+    }
+  }, [instance, onRequestPairingCode])
+
   if (!open || !instance) {
     return null
   }
 
   const showQr = instance.status === 'pending' && Boolean(instance.qrCode)
+  const formattedPairingCode =
+    pairingCode?.replace(/\s+/g, '').match(/.{1,3}/g)?.join(' ') ?? pairingCode
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
@@ -390,6 +521,39 @@ const QrModal = ({
               </p>
             )}
           </div>
+
+          {instance.status === 'pending' ? (
+            <div className="w-full max-w-xs rounded-2xl border border-indigo-200 bg-indigo-50 p-4 text-center text-sm text-indigo-900 dark:border-indigo-900/40 dark:bg-indigo-900/20 dark:text-indigo-100">
+              <p className="font-medium">Código de vinculación</p>
+              {formattedPairingCode ? (
+                <p className="mt-3 text-2xl font-mono tracking-[0.3em]">
+                  {formattedPairingCode}
+                </p>
+              ) : (
+                <p className="mt-3 text-xs text-indigo-700/90 dark:text-indigo-100/70">
+                  Si no puedes escanear el QR, solicita un código numérico y
+                  captúralo en tu teléfono.
+                </p>
+              )}
+              <div className="mt-4 flex justify-center">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={handleRequestPairingCode}
+                  disabled={isPairingPending}
+                >
+                  {isPairingPending
+                    ? 'Generando código...'
+                    : formattedPairingCode
+                    ? 'Actualizar código'
+                    : 'Obtener código'}
+                </Button>
+              </div>
+              {pairingError ? (
+                <p className="mt-2 text-xs text-red-500">{pairingError}</p>
+              ) : null}
+            </div>
+          ) : null}
 
           <div className="flex flex-col items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
             <span>
