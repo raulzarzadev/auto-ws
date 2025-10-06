@@ -27,7 +27,6 @@ import {
   fetchUserInstancesAction,
   requestInstancePairingCodeAction,
   regenerateInstanceQrAction,
-  startInstanceAction,
   sendInstanceTestMessageAction,
   updateInstanceStatusAction
 } from '@/lib/trpc/actions'
@@ -153,16 +152,101 @@ export const UserDashboardClient = ({
     [markUpdated]
   )
 
+  const handleInstanceSynced = useCallback(
+    (instance: WhatsAppInstance) => {
+      setInstances((prev) => {
+        let changed = false
+        const next = prev.map((item) => {
+          if (item.id === instance.id) {
+            if (
+              item.updatedAt !== instance.updatedAt ||
+              item.status !== instance.status ||
+              item.qrCode !== instance.qrCode
+            ) {
+              changed = true
+            }
+            return instance
+          }
+          return item
+        })
+
+        if (changed) {
+          markUpdated()
+        }
+
+        return next
+      })
+    },
+    [markUpdated]
+  )
+
+  const startInstanceViaStream = useCallback(
+    (id: string) =>
+      new Promise<void>((resolve, reject) => {
+        const source = new EventSource(`/api/instances/${id}/session`)
+        let finished = false
+
+        const cleanup = (errorMessage?: string) => {
+          if (finished) return
+          finished = true
+          source.close()
+          if (errorMessage) {
+            reject(new Error(errorMessage))
+          } else {
+            resolve()
+          }
+        }
+
+        const parsePayload = (event: MessageEvent) => {
+          try {
+            return JSON.parse(event.data)
+          } catch (error) {
+            console.error('[startInstanceViaStream.parse]', error)
+            return null
+          }
+        }
+
+        source.addEventListener('instance', (event) => {
+          const payload = parsePayload(event as MessageEvent)
+          const data = payload?.instance as WhatsAppInstance | undefined
+          if (data) {
+            handleInstanceSynced(data)
+          }
+        })
+
+        source.addEventListener('connected', (event) => {
+          const payload = parsePayload(event as MessageEvent)
+          const data = payload?.instance as WhatsAppInstance | undefined
+          if (data) {
+            handleInstanceSynced(data)
+          }
+          cleanup()
+        })
+
+        source.addEventListener('error', (event) => {
+          const payload = parsePayload(event as MessageEvent)
+          const message =
+            (payload && typeof payload.message === 'string'
+              ? payload.message
+              : null) ??
+            'No pudimos encender la instancia. Vuelve a intentarlo en unos segundos.'
+          cleanup(message)
+        })
+
+        source.addEventListener('ping', () => {
+          // Mantiene la conexión activa; no hacemos nada en el cliente.
+        })
+      }),
+    [handleInstanceSynced]
+  )
+
   const handleStartInstance = useCallback(
     (id: string) => {
       setPendingAction({ id, type: 'start' })
       startMutating(() => {
         void (async () => {
           try {
-            const updated = await startInstanceAction({ id })
-            setInstances((prev) =>
-              prev.map((item) => (item.id === updated.id ? updated : item))
-            )
+            await startInstanceViaStream(id)
             markUpdated()
             setFeedback({
               type: 'success',
@@ -182,7 +266,7 @@ export const UserDashboardClient = ({
         })()
       })
     },
-    [markUpdated]
+    [markUpdated, startInstanceViaStream]
   )
 
   const handleRegenerate = useCallback(
@@ -289,34 +373,6 @@ export const UserDashboardClient = ({
       })
     },
     [instances]
-  )
-
-  const handleInstanceSynced = useCallback(
-    (instance: WhatsAppInstance) => {
-      setInstances((prev) => {
-        let changed = false
-        const next = prev.map((item) => {
-          if (item.id === instance.id) {
-            if (
-              item.updatedAt !== instance.updatedAt ||
-              item.status !== instance.status ||
-              item.qrCode !== instance.qrCode
-            ) {
-              changed = true
-            }
-            return instance
-          }
-          return item
-        })
-
-        if (changed) {
-          markUpdated()
-        }
-
-        return next
-      })
-    },
-    [markUpdated]
   )
 
   const handleCloseTestModal = useCallback(() => {

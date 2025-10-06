@@ -39,15 +39,6 @@ export const createInstanceAction = async (input: CreateInstanceInput) => {
   return instance
 }
 
-export const startInstanceAction = async (input: InstanceIdInput) => {
-  const user = await requireSession()
-  const data = instanceIdSchema.parse(input)
-
-  const instance = await instanceService.start(user.id, data.id)
-  revalidatePath('/app')
-  return instance
-}
-
 export const deleteInstanceAction = async (input: InstanceIdInput) => {
   const user = await requireSession()
   const data = instanceIdSchema.parse(input)

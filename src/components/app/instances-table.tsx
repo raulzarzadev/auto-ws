@@ -249,8 +249,7 @@ export const UserInstancesTable = ({
                   <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600 dark:border-slate-700 dark:bg-slate-900/30 dark:text-slate-200">
                     <p className="font-medium">Instancia apagada.</p>
                     <p className="mt-1 text-slate-500 dark:text-slate-300">
-                      Enciéndela para generar un nuevo QR o un código de
-                      enlace.
+                      Enciéndela para generar un nuevo QR o un código de enlace.
                     </p>
                   </div>
                 )}
@@ -301,7 +300,9 @@ export const UserInstancesTable = ({
                       size="sm"
                       variant="ghost"
                       disabled={isActionDisabled(instance.id, 'status')}
-                      onClick={() => onStatusChange(instance.id, 'disconnected')}
+                      onClick={() =>
+                        onStatusChange(instance.id, 'disconnected')
+                      }
                     >
                       {isDisconnecting ? 'Apagando…' : 'Apagar'}
                     </Button>
@@ -322,7 +323,9 @@ export const UserInstancesTable = ({
                       size="sm"
                       variant="ghost"
                       disabled={isActionDisabled(instance.id, 'status')}
-                      onClick={() => onStatusChange(instance.id, 'disconnected')}
+                      onClick={() =>
+                        onStatusChange(instance.id, 'disconnected')
+                      }
                     >
                       {isDisconnecting ? 'Apagando…' : 'Apagar'}
                     </Button>
@@ -332,9 +335,7 @@ export const UserInstancesTable = ({
                       disabled={isActionDisabled(instance.id, 'test-message')}
                       onClick={() => onSendTestMessage(instance.id)}
                     >
-                      {isTesting
-                        ? 'Enviando…'
-                        : 'Enviar mensaje de prueba'}
+                      {isTesting ? 'Enviando…' : 'Enviar mensaje de prueba'}
                     </Button>
                   </>
                 ) : null}
@@ -475,7 +476,10 @@ const QrModal = ({
 
   const showQr = instance.status === 'pending' && Boolean(instance.qrCode)
   const formattedPairingCode =
-    pairingCode?.replace(/\s+/g, '').match(/.{1,3}/g)?.join(' ') ?? pairingCode
+    pairingCode
+      ?.replace(/\s+/g, '')
+      .match(/.{1,3}/g)
+      ?.join(' ') ?? pairingCode
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">

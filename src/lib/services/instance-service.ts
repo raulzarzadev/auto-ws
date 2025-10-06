@@ -47,9 +47,27 @@ export const instanceService = {
     }
 
     try {
-      return await startWhatsAppSession(instance.id)
+      const { instance: latest } = await startWhatsAppSession(instance.id)
+      return latest
     } catch (error) {
       console.error('[instanceService.start]', error)
+      throw new Error(mapWhatsAppCreationError(error))
+    }
+  },
+  async startInteractive(ownerId: string, instanceId: string) {
+    const instance = await instanceRepository.findById(instanceId)
+    if (!instance || instance.ownerId !== ownerId) {
+      throw new Error('INSTANCE_NOT_FOUND')
+    }
+
+    if (instance.status === 'connected') {
+      throw new Error('INSTANCE_ALREADY_CONNECTED')
+    }
+
+    try {
+      return await startWhatsAppSession(instance.id)
+    } catch (error) {
+      console.error('[instanceService.startInteractive]', error)
       throw new Error(mapWhatsAppCreationError(error))
     }
   },
@@ -114,7 +132,8 @@ export const instanceService = {
     }
 
     try {
-      return await startWhatsAppSession(instance.id)
+      const { instance: latest } = await startWhatsAppSession(instance.id)
+      return latest
     } catch (error) {
       console.error('[instanceService.regenerateQr]', error)
       throw new Error(mapWhatsAppCreationError(error))
@@ -135,7 +154,9 @@ export const instanceService = {
 
     if (!instance.phoneNumber) {
       throw Object.assign(
-        new Error('Configura un número de teléfono antes de generar el código.'),
+        new Error(
+          'Configura un número de teléfono antes de generar el código.'
+        ),
         { code: 'WA_PAIRING_PHONE_MISSING' }
       )
     }
@@ -197,18 +218,25 @@ export const instanceService = {
     return sendWhatsAppMessage(instance.id, jid, {
       text: messageContent
     })
-  }
+  },
+  formatStartError: (error: unknown) => mapWhatsAppCreationError(error)
 }
 
-const startWhatsAppSession = async (instanceId: string) => {
+import type { WhatsAppSession as ActiveWhatsAppSession } from '@/lib/services/whatsapp-service'
+
+const startWhatsAppSession = async (
+  instanceId: string
+): Promise<{ instance: WhatsAppInstance; session: ActiveWhatsAppSession }> => {
   await instanceRepository.updateStatus(instanceId, 'pending', null)
+
+  let session: ActiveWhatsAppSession | null = null
 
   try {
     const { createWhatsAppSession } = await import(
       '@/lib/services/whatsapp-service'
     )
 
-    const session = await createWhatsAppSession(instanceId, {
+    session = await createWhatsAppSession(instanceId, {
       onQr: async (qrCode) => {
         await instanceRepository.updateStatus(instanceId, 'pending', qrCode)
       },
@@ -234,7 +262,7 @@ const startWhatsAppSession = async (instanceId: string) => {
       }
     })
 
-    session.completion.catch((error) => {
+    session.completion.catch((error: unknown) => {
       console.error(`[instanceService.session:${instanceId}]`, error)
     })
 
@@ -245,19 +273,29 @@ const startWhatsAppSession = async (instanceId: string) => {
       throw new Error('INSTANCE_NOT_FOUND')
     }
 
+    let normalized = latest
+
     if (latest.status === 'connected' && !latest.apiKey) {
       const apiKey = await instanceRepository.ensureApiKey(latest.id)
       if (apiKey) {
-        return { ...latest, apiKey }
+        normalized = { ...latest, apiKey }
       }
     }
 
-    return latest
+    return { instance: normalized, session }
   } catch (error) {
     try {
       await instanceRepository.updateStatus(instanceId, 'disconnected', null)
     } catch (resetError) {
       console.error('[instanceService.start.reset]', resetError)
+    }
+
+    if (session) {
+      try {
+        session.end()
+      } catch (endError) {
+        console.error('[instanceService.start.end]', endError)
+      }
     }
 
     throw error

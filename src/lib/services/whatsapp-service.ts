@@ -168,7 +168,7 @@ interface ManagedSession {
   qrTimeout?: NodeJS.Timeout
 }
 
-interface WhatsAppSession {
+export interface WhatsAppSession {
   firstQr: Promise<string | undefined>
   completion: Promise<void>
   end: () => void
