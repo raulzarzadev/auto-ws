@@ -29,13 +29,24 @@ export const verifySession = async (token?: string) => {
       .collection('users')
       .doc(decoded.uid)
       .get()
-    const user = snapshot.exists
-      ? (snapshot.data() as Partial<AppUser>)
-      : undefined
-    return {
-      ...mapClaimsToUser(decoded),
-      ...user
-    } satisfies AppUser
+
+    const rawData = snapshot.exists ? snapshot.data() : null
+
+    // Create a plain object to avoid Firestore prototype issues
+    const user: AppUser = {
+      id: rawData?.id ?? String(decoded.uid),
+      email: rawData?.email ?? String(decoded.email ?? 'unknown@example.com'),
+      displayName:
+        rawData?.displayName ??
+        String(decoded.name ?? decoded.email ?? 'Usuario'),
+      role: (rawData?.role as UserRole) ?? 'user',
+      createdAt:
+        rawData?.createdAt ??
+        new Date(Number(decoded.auth_time ?? Date.now()) * 1000).toISOString(),
+      lastLoginAt: rawData?.lastLoginAt ?? new Date().toISOString()
+    }
+
+    return user
   } catch (error) {
     console.error('Failed to verify session', error)
     return null

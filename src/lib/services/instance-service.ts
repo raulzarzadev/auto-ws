@@ -23,7 +23,18 @@ export const instanceService = {
       if (!apiKey) {
         throw new Error('INSTANCE_NOT_FOUND')
       }
-      return { ...instance, apiKey }
+      return {
+        id: instance.id,
+        ownerId: instance.ownerId,
+        label: instance.label,
+        status: instance.status,
+        qrCode: instance.qrCode,
+        phoneNumber: instance.phoneNumber,
+        createdAt: instance.createdAt,
+        updatedAt: instance.updatedAt,
+        apiKey,
+        metadata: instance.metadata
+      }
     }
     return instance
   },
@@ -116,7 +127,18 @@ export const instanceService = {
     if (!updated.apiKey) {
       const apiKey = await instanceRepository.ensureApiKey(updated.id)
       if (apiKey) {
-        return { ...updated, apiKey }
+        return {
+          id: updated.id,
+          ownerId: updated.ownerId,
+          label: updated.label,
+          status: updated.status,
+          qrCode: updated.qrCode,
+          phoneNumber: updated.phoneNumber,
+          createdAt: updated.createdAt,
+          updatedAt: updated.updatedAt,
+          apiKey,
+          metadata: updated.metadata
+        }
       }
     }
 
@@ -278,7 +300,18 @@ const startWhatsAppSession = async (
     if (latest.status === 'connected' && !latest.apiKey) {
       const apiKey = await instanceRepository.ensureApiKey(latest.id)
       if (apiKey) {
-        normalized = { ...latest, apiKey }
+        normalized = {
+          id: latest.id,
+          ownerId: latest.ownerId,
+          label: latest.label,
+          status: latest.status,
+          qrCode: latest.qrCode,
+          phoneNumber: latest.phoneNumber,
+          createdAt: latest.createdAt,
+          updatedAt: latest.updatedAt,
+          apiKey,
+          metadata: latest.metadata
+        }
       }
     }
 

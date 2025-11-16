@@ -24,15 +24,62 @@ export const instanceRepository = {
       .collection(COLLECTION)
       .where('ownerId', '==', ownerId)
       .get()
-    return snapshot.docs.map((doc) => doc.data() as WhatsAppInstance)
+    return snapshot.docs.map((doc) => {
+      const data = doc.data()
+      // Return a plain object, not Firestore document data
+      return {
+        id: data.id,
+        ownerId: data.ownerId,
+        label: data.label,
+        status: data.status,
+        qrCode: data.qrCode ?? null,
+        phoneNumber: data.phoneNumber,
+        createdAt: data.createdAt,
+        updatedAt: data.updatedAt,
+        apiKey: data.apiKey,
+        metadata: data.metadata ?? {}
+      } as WhatsAppInstance
+    })
   },
   async findById(id: string) {
     const doc = await firebaseAdminDb.collection(COLLECTION).doc(id).get()
-    return doc.exists ? (doc.data() as WhatsAppInstance) ?? null : null
+    if (!doc.exists) return null
+
+    const data = doc.data()
+    if (!data) return null
+
+    // Return a plain object, not Firestore document data
+    return {
+      id: data.id,
+      ownerId: data.ownerId,
+      label: data.label,
+      status: data.status,
+      qrCode: data.qrCode ?? null,
+      phoneNumber: data.phoneNumber,
+      createdAt: data.createdAt,
+      updatedAt: data.updatedAt,
+      apiKey: data.apiKey,
+      metadata: data.metadata ?? {}
+    } as WhatsAppInstance
   },
   async listAll() {
     const snapshot = await firebaseAdminDb.collection(COLLECTION).get()
-    return snapshot.docs.map((doc) => doc.data() as WhatsAppInstance)
+    return snapshot.docs.map((doc) => {
+      const data = doc.data()
+      // Return a plain object, not Firestore document data
+      return {
+        id: data.id,
+        ownerId: data.ownerId,
+        label: data.label,
+        status: data.status,
+        qrCode: data.qrCode ?? null,
+        phoneNumber: data.phoneNumber,
+        createdAt: data.createdAt,
+        updatedAt: data.updatedAt,
+        apiKey: data.apiKey,
+        metadata: data.metadata ?? {}
+      } as WhatsAppInstance
+    })
   },
   async create(payload: CreateInstanceRecord) {
     const id = firebaseAdminDb.collection(COLLECTION).doc().id
@@ -62,7 +109,9 @@ export const instanceRepository = {
       return null
     }
 
-    const data = snapshot.data() as WhatsAppInstance
+    const data = snapshot.data()
+    if (!data) return null
+
     if (data.apiKey) {
       return data.apiKey
     }
@@ -95,6 +144,23 @@ export const instanceRepository = {
     if (!snapshot.exists) {
       throw new Error('INSTANCE_NOT_FOUND')
     }
-    return snapshot.data() as WhatsAppInstance
+
+    const data = snapshot.data()
+    if (!data) {
+      throw new Error('INSTANCE_NOT_FOUND')
+    }
+
+    return {
+      id: data.id,
+      ownerId: data.ownerId,
+      label: data.label,
+      status: data.status,
+      qrCode: data.qrCode ?? null,
+      phoneNumber: data.phoneNumber,
+      createdAt: data.createdAt,
+      updatedAt: data.updatedAt,
+      apiKey: data.apiKey,
+      metadata: data.metadata ?? {}
+    } as WhatsAppInstance
   }
 }

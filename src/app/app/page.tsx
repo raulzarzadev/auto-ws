@@ -13,5 +13,19 @@ export default async function UserDashboardPage() {
 
   const instances = await instanceService.listForOwner(user.id)
 
-  return <UserDashboardClient initialInstances={instances} />
+  // Force serialization to remove any prototype chains
+  const cleanInstances = instances.map((inst) => ({
+    id: inst.id,
+    ownerId: inst.ownerId,
+    label: inst.label,
+    status: inst.status,
+    qrCode: inst.qrCode,
+    phoneNumber: inst.phoneNumber,
+    createdAt: inst.createdAt,
+    updatedAt: inst.updatedAt,
+    apiKey: inst.apiKey,
+    metadata: inst.metadata
+  }))
+
+  return <UserDashboardClient initialInstances={cleanInstances} />
 }
