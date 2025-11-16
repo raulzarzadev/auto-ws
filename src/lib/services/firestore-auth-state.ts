@@ -81,7 +81,9 @@ export const loadFirestoreAuthState = async (
           let value = keysStore?.[type]?.[id]
 
           if (type === 'app-state-sync-key' && value) {
-            value = proto.Message.AppStateSyncKeyData.fromObject(value)
+            value = proto.Message.AppStateSyncKeyData.decode(
+              Buffer.from(JSON.stringify(value))
+            )
           }
 
           if (value) {

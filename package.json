@@ -23,6 +23,7 @@
     "jimp": "^1.6.0",
     "keyv": "^5.5.3",
     "libphonenumber-js": "^1.12.23",
+    "sharp": "^0.34.4",
     "lucide-react": "^0.469.0",
     "next": "15.5.4",
     "next-themes": "^0.3.0",
