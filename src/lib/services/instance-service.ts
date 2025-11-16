@@ -237,9 +237,16 @@ export const instanceService = {
         ? input.content
         : `Mensaje de prueba desde ${instance.label}.`
 
-    return sendWhatsAppMessage(instance.id, jid, {
+    const result = await sendWhatsAppMessage(instance.id, jid, {
       text: messageContent
     })
+
+    // Return a plain serializable object instead of Baileys response
+    return {
+      success: true,
+      messageId: result?.key?.id ?? null,
+      timestamp: result?.messageTimestamp ?? null
+    }
   },
   formatStartError: (error: unknown) => mapWhatsAppCreationError(error)
 }

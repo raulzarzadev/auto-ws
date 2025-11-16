@@ -26,6 +26,7 @@ export default async function UserAppLayout({
     lastLoginAt: user.lastLoginAt
   }
 
+
   return (
     <AppShell
       title="Mis instancias"

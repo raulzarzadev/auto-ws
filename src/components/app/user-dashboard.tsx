@@ -409,7 +409,7 @@ export const UserDashboardClient = ({
     setPendingAction({ id: testModalInstance.id, type: 'test-message' })
 
     try {
-      await sendInstanceTestMessageAction({
+      const res = await sendInstanceTestMessageAction({
         id: testModalInstance.id,
         phone,
         content

@@ -85,6 +85,5 @@ export const sendInstanceTestMessageAction = async (
 ) => {
   const user = await requireSession()
   const data = sendTestMessageSchema.parse(input)
-
   return instanceService.sendTestMessage(user.id, data)
 }
