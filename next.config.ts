@@ -1,11 +1,7 @@
-import type { NextConfig } from "next";
+import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: [
-    '@whiskeysockets/baileys',
-    'sharp',
-    'qrcode'
-  ]
-};
+  serverExternalPackages: ['@whiskeysockets/baileys', 'sharp', 'qrcode']
+}
 
-export default nextConfig;
+export default nextConfig

@@ -415,6 +415,11 @@ const QrModal = ({
       return
     }
 
+    // Guard: only run Firestore subscription on client side when Firebase is initialized
+    if (typeof window === 'undefined' || !firestore) {
+      return
+    }
+
     setError(null)
 
     const reference = doc(firestore, 'instances', instance.id)
