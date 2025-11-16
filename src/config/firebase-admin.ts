@@ -29,5 +29,9 @@ const app = shouldInitialize
   : null
 
 export const firebaseAdminApp = app!
-export const firebaseAdminAuth = app ? getAuth(app) : (null as any)
-export const firebaseAdminDb = app ? getFirestore(app) : (null as any)
+export const firebaseAdminAuth = app
+  ? getAuth(app)
+  : (null as unknown as ReturnType<typeof getAuth>)
+export const firebaseAdminDb = app
+  ? getFirestore(app)
+  : (null as unknown as ReturnType<typeof getFirestore>)
