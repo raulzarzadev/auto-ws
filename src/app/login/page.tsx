@@ -32,6 +32,8 @@ import { zodToFormikValidate } from '@/lib/forms/zodAdapter'
 import { ErrorBoundary } from '@/components/shared/error-boundary'
 import { firebaseAuth } from '@/config/firebase-client'
 
+export const dynamic = 'force-dynamic'
+
 const EMAIL_STORAGE_KEY = 'auto-ws-email-for-sign-in'
 
 const loginSchema = z.object({
