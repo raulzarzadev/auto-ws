@@ -16,9 +16,10 @@ const firebaseConfig = process.env.NEXT_PUBLIC_FIREBASE_CONFIG
 
 // Skip initialization during build time when credentials are not available
 const shouldInitialize =
-  typeof window !== 'undefined' ||
-  (process.env.NEXT_PUBLIC_FIREBASE_API_KEY !== 'demo-api-key' &&
-    !process.env.NEXT_PUBLIC_FIREBASE_API_KEY?.includes('demo'))
+  typeof window !== 'undefined' || // Browser environment
+  (process.env.NEXT_PUBLIC_FIREBASE_API_KEY && // Has API key
+    process.env.NEXT_PUBLIC_FIREBASE_API_KEY !== 'demo-api-key' && // Not demo
+    !process.env.NEXT_PUBLIC_FIREBASE_API_KEY.includes('demo')) // Not demo variant
 
 const firebaseApp: FirebaseApp | null = shouldInitialize
   ? getApps().length > 0
