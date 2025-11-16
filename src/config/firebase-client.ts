@@ -1,6 +1,6 @@
-import { initializeApp, getApps, getApp } from 'firebase/app'
-import { getAuth } from 'firebase/auth'
-import { getFirestore } from 'firebase/firestore'
+import { initializeApp, getApps, getApp, type FirebaseApp } from 'firebase/app'
+import { getAuth, type Auth } from 'firebase/auth'
+import { getFirestore, type Firestore } from 'firebase/firestore'
 
 const firebaseConfig = process.env.NEXT_PUBLIC_FIREBASE_CONFIG
   ? JSON.parse(process.env.NEXT_PUBLIC_FIREBASE_CONFIG)
@@ -14,9 +14,22 @@ const firebaseConfig = process.env.NEXT_PUBLIC_FIREBASE_CONFIG
       measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
     }
 
-const firebaseApp =
-  getApps().length > 0 ? getApp() : initializeApp(firebaseConfig)
+// Skip initialization during build time when credentials are not available
+const shouldInitialize =
+  typeof window !== 'undefined' ||
+  (process.env.NEXT_PUBLIC_FIREBASE_API_KEY !== 'demo-api-key' &&
+    !process.env.NEXT_PUBLIC_FIREBASE_API_KEY?.includes('demo'))
 
-export const firebaseAuth = getAuth(firebaseApp)
-export const firestore = getFirestore(firebaseApp)
+const firebaseApp: FirebaseApp | null = shouldInitialize
+  ? getApps().length > 0
+    ? getApp()
+    : initializeApp(firebaseConfig)
+  : null
+
+export const firebaseAuth = firebaseApp
+  ? getAuth(firebaseApp)
+  : (null as unknown as Auth)
+export const firestore = firebaseApp
+  ? getFirestore(firebaseApp)
+  : (null as unknown as Firestore)
 export { firebaseApp }
