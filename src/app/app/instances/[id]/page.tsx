@@ -16,7 +16,8 @@ interface InstanceDetailsPageProps {
   params: Promise<{ id: string }>
 }
 
-const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://auto-ws.vercel.app'
+const baseUrl =
+  process.env.NEXT_PUBLIC_APP_URL ?? 'https://auto-ws-production.up.railway.app'
 
 export default async function InstanceDetailsPage({
   params
